@@ -1,0 +1,3 @@
+/* The app fills the window, as the design did. */
+html, body { height: 100%; margin: 0; }
+#root, #root > .sc-host { height: 100%; }

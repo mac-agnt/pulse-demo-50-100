@@ -1,0 +1,26 @@
+{
+  "name": "pulse-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "import-design": "node tools/import-design.mjs \"design/Pulse v5 Harbour.dc.html\""
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "acorn": "^8.18.0",
+    "parse5": "^7.3.0",
+    "typescript": "~5.6.3",
+    "vite": "^6.0.0"
+  }
+}

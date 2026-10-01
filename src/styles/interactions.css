@@ -1,0 +1,57 @@
+/* Hover / active / focus states from the design's style-hover, style-active and style-focus attributes. */
+.ix0:hover{transform:scale(1.07) !important}
+.ix1:active{transform:scale(.94) !important}
+.ix2:hover{background:var(--track) !important;color:var(--ink) !important}
+.ix3:hover{color:var(--ink) !important}
+.ix4:active{transform:scale(.985) !important}
+.ix5:hover{background:var(--surface-2) !important;color:var(--ink) !important}
+.ix6:hover{background:var(--accent-soft) !important}
+.ix7:hover{border-color:var(--border) !important;color:var(--ink) !important}
+.ix8:hover{background:var(--track) !important}
+.ix9:hover{background:var(--surface-2) !important;border-color:var(--border-strong) !important;transform:translateX(-2px) !important}
+.ixa:hover{border-color:var(--accent-line) !important;color:var(--ink) !important}
+.ixb:hover{transform:translateY(-1px) !important}
+.ixc:hover{transform:translateY(-2px) !important;border-color:rgba(255,255,255,.18) !important;background:linear-gradient(160deg,rgba(255,255,255,.1),rgba(255,255,255,.025) 55%) !important}
+.ixd:hover{color:var(--bad) !important;border-color:var(--bad) !important}
+.ixe:hover{border-color:var(--accent) !important;color:var(--ink) !important;transform:translateY(-1px) !important}
+.ixf:hover{border-color:var(--accent-line) !important;background:var(--surface-2) !important;color:var(--ink) !important}
+.ixg:hover{border-color:var(--border-strong) !important;color:var(--ink) !important;transform:translateY(-1px) !important}
+.ixh:hover{background:var(--surface) !important}
+.ixi:focus{border-color:var(--accent) !important;box-shadow:0 0 0 4px var(--accent-faint) !important}
+.ixj:hover{background:var(--accent-hover) !important;transform:translateY(-1px) !important;box-shadow:0 8px 20px var(--accent-soft) !important}
+.ixk:active{transform:translateY(0) scale(.96) !important}
+.ixl:hover{background:var(--surface) !important;color:var(--ink) !important}
+.ixm:hover{color:var(--ink) !important;border-color:var(--border-strong) !important}
+.ixn:hover{transform:translateY(-2px) !important}
+.ixo:active{transform:scale(.95) !important}
+.ixp:hover{background:var(--accent-hover) !important;transform:translateY(-1px) !important}
+.ixq:active{transform:translateY(0) scale(.98) !important}
+.ixr:hover{border-color:var(--border-strong) !important;transform:translateY(-1px) !important}
+.ixs:active{transform:translateY(0) scale(.99) !important}
+.ixt:hover{color:var(--accent) !important;border-color:var(--accent) !important}
+.ixu:hover{border-color:var(--accent) !important;color:var(--ink) !important}
+.ixv:hover{transform:scale(1.12) !important}
+.ixw:hover{border-color:var(--accent) !important;color:var(--accent) !important}
+.ixx:hover{transform:translateY(-2px) !important;border-color:var(--border-strong) !important}
+.ixy:hover{background:var(--accent-soft) !important;transform:translateY(-1px) !important}
+.ixz:hover{border-color:var(--border-strong) !important}
+.ix10:hover{border-color:var(--border-strong) !important;color:var(--ink) !important}
+.ix11:hover{background:var(--surface-2) !important}
+.ix12:hover{background:var(--accent-fill,var(--accent)) !important;color:var(--on-accent) !important;box-shadow:var(--accent-glow,none) !important;border-color:var(--accent) !important;transform:translateY(-2px) !important}
+.ix13:focus{border-color:var(--accent) !important}
+.ix14:hover{border-color:var(--border-strong) !important;transform:translateY(-2px) !important}
+.ix15:hover{background:var(--accent-faint) !important}
+.ix16:hover{transform:translateY(-5px) scale(1.01) !important;border-color:var(--border-strong) !important;box-shadow:0 18px 40px rgba(0,0,0,.22) !important}
+.ix17:focus{border-color:var(--accent-line) !important}
+.ix18:hover{transform:translateY(-3px) scale(1.04) !important;box-shadow:0 20px 44px rgba(0,0,0,.42) !important}
+.ix19:hover{border-color:var(--accent-line) !important;background:var(--surface) !important;color:var(--ink) !important;transform:translateX(2px) !important}
+.ix1a:hover{transform:translateY(-1px) !important;box-shadow:0 6px 16px var(--accent-faint) !important}
+.ix1b:focus{color:var(--ink) !important}
+.ix1c:focus{border-color:var(--accent) !important;box-shadow:0 20px 52px var(--glass-shadow),0 0 0 3px var(--accent-faint) !important}
+.ix1d:hover{transform:translateY(-1px) !important;box-shadow:0 10px 24px var(--accent-soft) !important}
+.ix1e:hover{color:var(--ink) !important;border-color:var(--border-strong) !important;transform:scale(1.05) !important}
+.ix1f:focus{outline:2px solid var(--accent) !important;outline-offset:2px !important}
+.ix1g:focus{border-color:var(--accent) !important;box-shadow:0 0 0 3px var(--accent-faint) !important}
+.ix1h:focus{outline:2px solid var(--accent) !important;outline-offset:3px !important}
+.ix1i:hover{border-color:var(--accent) !important;color:var(--ink) !important;transform:translateY(-3px) !important}
+.ix1j:hover{transform:translateY(-4px) scale(1.012) !important;border-color:var(--accent-line) !important;box-shadow:0 20px 44px rgba(0,0,0,.46) !important}
