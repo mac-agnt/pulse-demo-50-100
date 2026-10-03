@@ -1,0 +1,41 @@
+/* Home right rail widgets. Card frame matches the original rail widgets; theme tokens only. */
+
+.hm-rail{display:flex;flex-direction:column;gap:14px;min-width:0}
+.hm-rail > .pk-seg{align-self:stretch}
+.hm-rail > .pk-seg button{flex:1;justify-content:center}
+.hm-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r,18px);backdrop-filter:blur(20px) saturate(1.3);
+  box-shadow:var(--card-shadow);padding:16px 18px 8px;min-width:0;margin:0}
+.hm-card-h{display:flex;align-items:center;gap:10px}
+.hm-card-t{flex:1;margin:0;font-size:13.5px;font-weight:500;color:var(--ink);padding:0}
+.hm-count{height:22px;display:inline-flex;align-items:center;padding:0 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm,9px);
+  font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:nowrap}
+.hm-x{width:24px;height:24px;flex:none;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hm-x:hover{color:var(--ink)}
+.hm-note{font-size:11px;color:var(--faint);margin-top:4px;line-height:1.45}
+.hm-body{margin-top:6px}
+.hm-list{list-style:none;margin:0;padding:0}
+.hm-list > li{border-top:1px solid var(--border)}
+.hm-list > li:first-child{border-top:0}
+.hm-row{display:flex;align-items:center;gap:10px;padding:9px 0;min-width:0}
+.hm-row--stack{flex-direction:column;align-items:stretch;gap:5px;padding:11px 0}
+.hm-row--btn{width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:8px;transition:background .16s var(--ease)}
+.hm-row--btn:hover:not([disabled]){background:var(--surface-2)}
+.hm-row--btn[disabled]{cursor:default}
+.hm-title{font-size:12.5px;color:var(--ink);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm-wrap{white-space:normal;overflow-wrap:anywhere}
+.hm-ref{font-size:11px;color:var(--dim)}
+.hm-sub{font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm-meta{flex:none;font-family:var(--mono);font-size:10.5px;color:var(--faint);white-space:nowrap}
+.hm-bad{color:var(--bad)}
+.hm-err{font-size:11px;color:var(--bad);margin-top:3px;line-height:1.4}
+.hm-check{width:18px;height:18px;flex:none;border-radius:6px;border:1.5px solid var(--border-strong);background:none;color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.hm-check svg{opacity:0;transition:opacity .16s var(--ease)}
+.hm-check:hover svg,.hm-check:focus-visible svg{opacity:1}
+.hm-link{all:unset;display:block;font-size:12.5px;color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.hm-link:hover{text-decoration:underline}
+.hm-empty{padding:16px 2px 18px;text-align:center;font-size:12.5px;color:var(--dim);line-height:1.5}
+.hm-more{all:unset;display:block;padding:8px 0 6px;font-size:11.5px;color:var(--accent);cursor:pointer}
+.hm-more:hover{text-decoration:underline}
+.hm-edit{border-style:dashed;border-color:var(--border-strong);padding-bottom:12px}
+.hm-toggle{display:flex;align-items:center;gap:9px;height:30px;font-size:12.5px;color:var(--body);cursor:pointer}
+.hm-rail :focus-visible{outline:2px solid var(--accent);outline-offset:2px}

@@ -26,7 +26,7 @@ export default function AgentStudioNewHero({ v }: Props) {
                   {"Good to meet you. What is the main thing you want help with?"}
                 </div>
                 <div style={{"fontSize":"11.5px","color":"var(--faint)","marginTop":"4px"}}>
-                  {"Say it plainly — it will ask the follow-ups it needs."}
+                  {"Say it plainly. It will ask the follow-ups it needs."}
                 </div>
               </div>
             </div>

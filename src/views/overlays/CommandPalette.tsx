@@ -85,7 +85,7 @@ export default function CommandPalette({ v }: Props) {
                 <div style={{"animation":"rowIn .34s var(--ease) 100ms both"}}>
                   <div style={{"display":"flex","alignItems":"center","gap":"9px","padding":"16px 20px 9px"}}>
                     <span style={{"fontFamily":"var(--mono)","fontSize":"9.5px","letterSpacing":"0.12em","color":"var(--faint)"}}>
-                      {"FREQUENTLY USED"}
+                      {"SHORTCUTS"}
                     </span>
                     <span style={{"flex":"1","height":"1px","background":"var(--border)"}} />
                   </div>

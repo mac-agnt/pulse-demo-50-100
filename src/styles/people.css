@@ -1,0 +1,70 @@
+/* People page (src/ui/people). Original Pulse card-row language, theme tokens only. */
+.pp-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:0 4px 16px}
+.pp-sep{width:1px;height:24px;background:var(--border)}
+.pp-search{height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;background:var(--chip);border:1px solid var(--chip-border);border-radius:var(--r-sm,9px);color:var(--faint);min-width:200px;flex:0 1 260px;transition:border-color .2s var(--ease)}
+.pp-search:focus-within{border-color:var(--accent-line);color:var(--dim)}
+.pp-search input{flex:1;min-width:0;border:0;outline:0;background:none;font:inherit;font-size:12.5px;color:var(--ink)}
+.pp-search input::placeholder{color:var(--faint)}
+.pp-clear{height:34px;display:inline-flex;align-items:center;gap:7px;padding:0 12px;background:var(--accent-faint);border:1px solid var(--accent-line);border-radius:var(--r-sm,9px);font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+
+.pp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r,18px);backdrop-filter:blur(20px) saturate(1.3);box-shadow:var(--card-shadow);padding:6px 22px 10px;min-width:0}
+.pp-card-h{display:flex;align-items:center;gap:12px;padding:14px 0 12px;font-size:12.5px;color:var(--faint)}
+.pp-note{display:flex;align-items:center;gap:8px;padding:10px 14px;margin:0 0 14px;border:1px solid var(--accent-line);background:var(--accent-faint);border-radius:var(--r-sm,9px);font-size:12.5px;color:var(--body)}
+
+.pp-row{display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px 0;border:0;border-top:1px solid var(--border);background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;
+  border-radius:0;animation:rowIn .45s var(--ease) both;transition:background .2s var(--ease)}
+.pp-row:hover .pp-name{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+.pp-row:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:10px}
+.pp-row[data-selected="true"]{background:linear-gradient(90deg,var(--accent-faint),transparent 70%)}
+.pp-av{flex:none;width:38px;height:38px;border-radius:var(--r-sm,11px);background:var(--track);color:var(--body);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;margin-top:1px;position:relative}
+.pp-av[data-away="true"]::after{content:"";position:absolute;right:-3px;bottom:-3px;width:10px;height:10px;border-radius:4px;background:var(--warn);border:2px solid var(--bg)}
+.pp-main{flex:1;min-width:0}
+.pp-name{font-size:15px;line-height:1.35;color:var(--ink)}
+.pp-title{font-size:12.5px;color:var(--dim);margin-left:8px}
+.pp-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;margin-top:8px}
+.pp-m{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);white-space:nowrap}
+.pp-m svg{flex:none}
+.pp-chips{flex:none;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;max-width:52%}
+.pp-load{flex:none;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:7px;font-size:12px;background:var(--track);color:var(--body);white-space:nowrap}
+
+.pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(440px,100%),1fr));gap:12px;margin-top:14px;align-items:start}
+.pp-list{display:flex;flex-direction:column}
+.pp-li{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--border);min-width:0;animation:rowIn .4s var(--ease) both}
+.pp-li:first-child{border-top:0}
+.pp-wrap + .pp-wrap{border-top:1px solid var(--border)}
+.pp-wrap > .pp-li{border-top:0}
+.pp-li-main{flex:1;min-width:0}
+.pp-li-t{font-size:13.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-li-s{font-size:12px;color:var(--faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-link{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left;max-width:100%}
+.pp-link:hover{text-decoration:underline;text-underline-offset:3px}
+.pp-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.pp-sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;padding:12px 0 4px}
+.pp-done{font-size:12px;color:var(--faint);white-space:nowrap}
+.pp-bar{height:4px;border-radius:2px;background:var(--accent);margin-top:7px;transform-origin:left;animation:growBar .6s var(--ease) both}
+.pp-panel-empty{padding:18px 0 6px;font-size:13px;color:var(--dim)}
+.pp-inline{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;padding:10px 12px;margin:2px 0 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm,9px)}
+.pp-inline label{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--dim);flex:1;min-width:150px}
+.pp-inline input{height:32px;padding:0 10px;border-radius:var(--r-ctl,9px);border:1px solid var(--border);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;outline:0}
+.pp-inline input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-faint)}
+.pp-err{flex-basis:100%;font-size:11.5px;color:var(--bad)}
+.pp-foot{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.5}
+
+/* Person panel */
+.pp-pi{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--border);font-size:13px;min-width:0;flex-wrap:wrap}
+.pp-pi:first-child{border-top:0}
+.pp-plist{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-md,12px);overflow:hidden}
+.pp-pi .pp-inline{flex-basis:100%;margin:4px 0 0}
+
+@media (max-width:760px){
+  .pp-card{padding:4px 14px 8px}
+  .pp-row{flex-wrap:wrap}
+  .pp-chips{max-width:100%;justify-content:flex-start;flex-basis:100%;padding-left:52px}
+  .pp-grid{grid-template-columns:minmax(0,1fr)}
+  .pp-search{flex:1 1 100%}
+  .pp-sep{display:none}
+  .pp-li{flex-wrap:wrap;row-gap:8px}
+  .pp-li > .pp-li-main{flex:1 1 calc(100% - 42px)}
+  .pp-li > .pp-li-main + *{margin-left:42px}
+}
+@media (prefers-reduced-motion:reduce){ .pp-row,.pp-li,.pp-bar{animation:none} }

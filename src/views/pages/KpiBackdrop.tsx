@@ -1,7 +1,8 @@
 
-type Props = { v: any };
+type Props = { v: any; still?: boolean };
 
-export default function KpiBackdrop({ v }: Props) {
+/* still: drop the slow drift (reduced motion). The visual is otherwise unchanged. */
+export default function KpiBackdrop({ still }: Props) {
   return (
     <>
       <div aria-hidden="true" style={{"position":"absolute","top":"12px","left":"18px","right":"18px","bottom":"0","borderRadius":"30px","overflow":"hidden","pointerEvents":"none","boxShadow":"inset 0 0 0 1px rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.35)"}}>
@@ -46,29 +47,29 @@ export default function KpiBackdrop({ v }: Props) {
           <rect width="1400" height="520" style={{"fill":"color-mix(in oklab, var(--kb,#5f8f63) 8%, #050806)"}} />
           <g filter="url(#kbBloom)">
             <circle cx="170" cy="110" r="250" style={{"fill":"color-mix(in oklab, var(--kb,#5f8f63) 58%, #050806)"}} opacity=".85">
-              <animateTransform attributeName="transform" type="translate" values="0 0;40 24;0 0" dur="34s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+              {!still && <animateTransform attributeName="transform" type="translate" values="0 0;40 24;0 0" dur="34s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />}
             </circle>
             <circle cx="1260" cy="400" r="270" style={{"fill":"color-mix(in oklab, var(--kb,#5f8f63) 64%, #050806)"}} opacity=".8">
-              <animateTransform attributeName="transform" type="translate" values="0 0;-36 -20;0 0" dur="28s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+              {!still && <animateTransform attributeName="transform" type="translate" values="0 0;-36 -20;0 0" dur="28s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />}
             </circle>
             <circle cx="760" cy="560" r="230" style={{"fill":"color-mix(in oklab, var(--kb,#5f8f63) 42%, #050806)"}} opacity=".6">
-              <animateTransform attributeName="transform" type="translate" values="0 0;24 -18;0 0" dur="38s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+              {!still && <animateTransform attributeName="transform" type="translate" values="0 0;24 -18;0 0" dur="38s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />}
             </circle>
           </g>
           <g>
-            <animateTransform attributeName="transform" type="translate" values="0 0;26 10;0 0" dur="26s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+            {!still && <animateTransform attributeName="transform" type="translate" values="0 0;26 10;0 0" dur="26s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />}
             <path d="M-120 118 C120 58 360 66 560 138 S960 262 1520 84 L1520 -40 H-120 Z" fill="#000" opacity=".5" filter="url(#kbSoftShadow)" transform="translate(0 18)" />
             <path d="M-120 118 C120 58 360 66 560 138 S960 262 1520 84 L1520 -40 H-120 Z" fill="url(#kbR1)" filter="url(#kbEdge)" />
             <path d="M-120 118 C120 58 360 66 560 138 S960 262 1520 84" fill="none" stroke="color-mix(in oklab, var(--kb,#5f8f63) 60%, #fff)" strokeOpacity=".32" strokeWidth="10" strokeLinecap="round" filter="url(#kbSheen)" />
           </g>
           <g>
-            <animateTransform attributeName="transform" type="translate" values="0 0;-30 -12;0 0" dur="22s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+            {!still && <animateTransform attributeName="transform" type="translate" values="0 0;-30 -12;0 0" dur="22s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />}
             <path d="M-120 330 C180 248 420 226 700 296 S1160 424 1520 290 L1520 432 C1180 548 920 440 700 424 S220 400 -120 478 Z" fill="#000" opacity=".5" filter="url(#kbSoftShadow)" transform="translate(0 18)" />
             <path d="M-120 330 C180 248 420 226 700 296 S1160 424 1520 290 L1520 432 C1180 548 920 440 700 424 S220 400 -120 478 Z" fill="url(#kbR2)" filter="url(#kbEdge)" />
             <path d="M-120 330 C180 248 420 226 700 296 S1160 424 1520 290" fill="none" stroke="color-mix(in oklab, var(--kb,#5f8f63) 60%, #fff)" strokeOpacity=".32" strokeWidth="10" strokeLinecap="round" filter="url(#kbSheen)" />
           </g>
           <g>
-            <animateTransform attributeName="transform" type="translate" values="0 0;-18 14;0 0" dur="30s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+            {!still && <animateTransform attributeName="transform" type="translate" values="0 0;-18 14;0 0" dur="30s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />}
             <path d="M1520 150 C1310 164 1140 262 1090 404 C1052 512 1130 600 1260 640 H1520 Z" fill="#000" opacity=".5" filter="url(#kbSoftShadow)" transform="translate(0 18)" />
             <path d="M1520 150 C1310 164 1140 262 1090 404 C1052 512 1130 600 1260 640 H1520 Z" fill="url(#kbR3)" filter="url(#kbEdge)" />
             <path d="M1520 150 C1310 164 1140 262 1090 404 C1052 512 1130 600 1260 640" fill="none" stroke="color-mix(in oklab, var(--kb,#5f8f63) 60%, #fff)" strokeOpacity=".32" strokeWidth="10" strokeLinecap="round" filter="url(#kbSheen)" />

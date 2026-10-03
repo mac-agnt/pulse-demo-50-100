@@ -1,57 +1,112 @@
-# Pulse — Harbour
+# Pulse: base for 50-100k implementations
 
-React build of the **Pulse v5 Harbour** design from Claude Design, the operations dashboard mocked up for Kilbride Group.
+An industry-agnostic version of Pulse. It keeps the Pulse shell: rail, top bar, themes, chat, agent faces and Ontology graph. Every working page reads from one shared core: Home, Dashboard, Work, Records, Activity, Agents and Settings.
 
-Every page, theme and interaction from the design is here. Screens were checked against the original mockup and match pixel for pixel at 1440×900 and 1024×720.
+It is a **frontend demo**. Data lives in the browser through a demo adapter. Nothing connects to an external system.
 
 ## Run it
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm run build      # type-check + production build into dist/
+npm test           # behavioural tests for the core (vitest)
+npm run typecheck
+npm run build
 ```
 
-## What's in it
+Two modes, switched from the card at the bottom of the rail:
 
-| Area | Where |
+- **Sample data**: "Example Organisation", with Unit North (Team A, Team B) and Unit South (Team C). It has generic people, records, documents, requests, tasks, runs and data issues. "Role preview" switches the viewer between an administrator, a unit lead, a team manager, a contributor and a second team manager. This is a preview, not sign-in.
+- **Clean template**: no records, no client names, no figures. Every page shows an empty state that explains how to populate it.
+
+State persists in `localStorage` (`pulse.core.v1`). "Reset sample" restores the fixtures.
+
+## Where things live
+
+| Area | Location |
 | --- | --- |
-| Pages: Home (Helios chat), Agents, Dashboard, Work, Records, Activity, Settings | `src/views/pages/` |
-| Overlays: ⌘K palette, agent studio, Helios mini chat, work viewer, new record, background gallery | `src/views/overlays/` |
-| App frame: sidebar, top bar, notifications | `src/views/AppShell.tsx` |
-| State and behaviour | `src/logic/PulseLogic.js` |
-| Demo data (Kilbride Group) | `src/logic/data.js` |
-| Agent avatar | `src/components/AgentFace.tsx` |
-| Theme tokens (Harbour, light and 11 more), animations | `src/styles/pulse.css` |
+| Entity and configuration types | `src/core/types.ts` |
+| Configuration registry and defaults | `src/core/config.ts` |
+| Permissions and scope | `src/core/access.ts` |
+| Query layer | `src/core/query.ts` |
+| Operations | `src/core/ops.ts` |
+| Metric engine | `src/core/metrics.ts` |
+| Data-quality detection | `src/core/quality.ts` |
+| Sample agent answers | `src/core/agent.ts` |
+| Demo adapter | `src/core/store.ts` |
+| Fixtures | `src/core/fixtures/sample.ts` (removable), `src/core/fixtures/clean.ts` |
+| Tests | `src/core/__tests__/core.test.ts` |
+| Page frame (original Pulse look: hero, stat strip, segmented tabs, chips, callouts, KPI tiles) | `src/ui/frame.tsx`, `src/styles/frame.css` |
+| Top bar switchers (unit scope, module, page) | `src/ui/topnav.tsx` |
+| Panels and form controls | `src/ui/kit.tsx`, `src/styles/kit.css` |
+| People and employment | `src/core/people.ts`, `src/ui/people` |
+| Shell parts | `src/ui/shell.tsx` |
+| Shared counts | `src/ui/selectors.ts` |
+| Pages | `src/ui/work`, `src/ui/people`, `src/ui/records`, `src/ui/dashboard`, `src/ui/home`, `src/ui/activity`, `src/ui/agents`, `src/ui/settings` |
+| Shell state, navigation, palette, chat | `src/logic/PulseLogic.js` |
+| Implementation map | `docs/IMPLEMENTATION_MAP.md` |
 
-## How it fits together
+What each core module does:
 
-- **`PulseLogic`** holds all state. Its `renderVals()` returns one flat object `v`.
-- **Views** are plain React components that render from `v`.
-- **`LogicHost`** (`src/runtime/logic.tsx`) mounts the logic and re-renders on `setState`.
-- **Backgrounds** live in `src/App.tsx`:
-  - `dashboardBackdrop`: the colour of the Dashboard KPI background
-  - `kpiBackdropOn`: whether that background shows
-  - `recordsBackdrop`: the colour of the Records wash (`""` uses the theme gradient)
-- **Customising for a client:** read `CLAUDE.md` first. It lists the layout rules every copy keeps.
+- **Permissions and scope:** a viewer's roles, the scopes they may select, and visibility rules for records, files, tasks, requests, approvals, runs, issues and events.
+- **Query layer:** dashboards, tables, panels, search, the palette, exports and agent answers all read through it, so permission and the selected scope apply the same way everywhere.
+- **Operations:** every state change. Requests and approvals: stages, return, resubmit, delegation, escalation, material-edit re-review. Execution keyed so it applies once. Tasks: claim, assign, dependencies with loop check, checklist, evidence. Recurring instances keyed by date. Run recovery with an effect ledger. Data-quality resolution: conflict, code mapping, merge with preview and undo, unmatched rows. Also saved views, report schedules, and organisation and configuration changes. Each one writes an audit event.
+- **Metric engine:** formula, period, previous period, target, partial and stale flags, missing contributors and drill-down ids. Ratios are calculated from their underlying totals.
+- **Data-quality detection:** missing-field issues are derived from record types live; other issues are stored.
+- **Demo adapter:** persistence, mode switch, role preview, scope and toasts.
 
-## Updating from Claude Design
+## What is operational and what is simulated
 
-Export the new version, replace the file in `design/`, then run:
+**Operational in this demo (runs locally, end to end):**
 
-```bash
-npm run import-design
-```
+- **Roles and scope:** role and scope rules. The scope control appears when there is more than one useful scope, stays the same across pages, and switches with a notice when a role change makes a choice invalid.
+- **Requests and approvals:** configurable forms, multi-stage routing, routing away from the requester, return, resubmit, delegation within limits, escalation of overdue decisions, and renewed review after a material edit. Every decision records the request version it reviewed.
+- **Execution:** an approved local action (correct a record, approve a document version, create a fulfilment task) runs once per request version. A repeat does nothing.
+- **Tasks:** queues, claiming with no double claim, assignment, dependencies with loop prevention, checklists, notes, evidence notes, saved views (sharing never widens access) and a personal focus timer.
+- **Top bar:** a unit scope switcher (regions, operating units with open and attention counts, planned units shown but not selectable, teams, My work), a module switcher listing every section, and a page switcher. "Show pages as tabs instead" swaps the page menu for the tab row.
+- **People (Work, People):** one row per person with employment stage, manager, tenure, certificates against the required list, documents to sign, open and overdue tasks, leave and access reviews. Actions: start onboarding or offboarding checklists, book a certificate renewal, record a certificate or signature, change stage with a reason, record an access review. Each creates keyed tasks (no duplicates) and an audit event. Leave is requested through the normal approvals and recorded once approved. Managers see their teams; contributors see their own record.
+- **Data quality dashboard:** a Dashboard area with completeness, open issues by kind and severity, stale records, resolution trend and the oldest issues, each opening the exact issues in Records, Data quality.
+- **Workflow runs:** step timelines, failure with business impact, assign, retry and skip-with-reason recovery, and an effect ledger so a retry never repeats a completed effect.
+- **Schedules:** a manual "run due instance" tick that never duplicates. Pausing future runs is separate from pausing a case.
+- **Records:** browse, a detail panel (Overview, Related, History, Sources), source-of-truth handling on edit, relationships in both directions, and versioned files that keep their source permissions.
+- **Data quality:** missing fields, duplicates (merge preview, merge, undo), unmapped codes, conflicts (comparison panel) and unmatched rows. Each resolution updates the record, the queue, the metrics and the audit trail together.
+- **Dashboard and activity:** metrics with drill-down to exactly the counted objects, a unit or team comparison computed from totals, a trend, exceptions, CSV export of permitted rows, and Activity Attention plus a searchable audit trail with record timelines.
+- **Settings:** editors for Organisation, Control, Systems, Governance and Experience, with drafts, validation and previews.
 
-This regenerates:
+**Simulated or not connected (labelled as such in the UI):**
 
-- `src/views/`
-- `src/styles/pulse.css`
-- `src/styles/interactions.css`
-- `src/logic/`
+- **Sign-in:** role preview only. There is no authentication.
+- **Security:** all permission checks run in the browser. **This is not security.** A production backend must enforce the same rules on every query and action and keep tenants isolated.
+- **AI:** there is no model. Chat and agent answers are sample responses built from the records you can see, with citations, and labelled as samples. The agent builder's "Prepare" step writes a template instruction and says so.
+- **Source systems:** "Sample source system" and "Sample spreadsheet import" are fixtures. No sync runs; sync state is stored data.
+- **Email:** not connected. Email routes, the external-confirmation effect and invitations send nothing. The external-confirmation request (REQ-207) shows the honest failure.
+- **Scheduler:** none. Schedule ticks are manual and marked "simulated". Report schedules are saved but never sent.
+- **File upload:** none. Evidence is recorded as named notes.
 
-`AgentFace` is hand-written and left alone. Commit before running, because it overwrites hand edits to those files.
+## Production dependencies still required
 
-## Fixed from the mockup
+1. **Backend API and database:** the same entities, with tenant isolation, and permission and scope enforcement server-side on every query, export and agent tool call.
+2. **Identity:** company sign-in (SSO/OIDC) mapped to people, roles and memberships.
+3. **Background workers:**
+   - a scheduler for recurring instances, automations and report delivery, using the same instance keys;
+   - escalation timers;
+   - durable workflow execution with the effect ledger.
+4. **Connectors:**
+   - source-system connectors with field mappings and write-back;
+   - an email provider with a verified sender.
+5. **AI:** a model behind `src/core/agent.ts`, limited to the query layer's permitted evidence.
+6. **File storage:** storage that keeps source document permissions.
 
-In the mockup, the work viewer's wrapper `<div>` was never closed. As a result, the ⌘K palette, agent studio, new record dialog and background gallery could only appear while the work viewer was open. They now open on their own. The fix is applied in `tools/import-design.mjs`.
+## Configuring a client
+
+Labels, modules, records, views and workflows are set in the client's configuration, not in code:
+
+- **Configuration:** an `OrgConfig` (see `src/core/types.ts`), edited in Settings or seeded as a fixture. It sets the workspace name, terminology, enabled capabilities, units and teams, roles and permissions, record types and fields, metrics and dashboards, request forms, approval rules, deadline policies, workflow templates, notification routes, sources, field and code mappings, agents and role layouts.
+- **Client data:** replace `src/core/fixtures/sample.ts` with the client's fixture, or with an API-backed adapter in `src/core/store.ts`. Keep `ops`, `query` and `metrics` as the shared rules.
+- **Locked layout:** read `CLAUDE.md` first. Agents sits under Home, Ontology is the first Records tab, and the Home centre column stays clean.
+
+## Known limits
+
+- The Ontology graph is an illustrative procedural layout (labelled so), kept because `CLAUDE.md` locks it. Browse is the way to find a record.
+- New requests do not create a workflow run. Runs exist for the seeded cases and for scheduled automations.
+- **Do not run `npm run import-design` on this copy.** It overwrites `src/views` and `src/logic` and would undo this work.

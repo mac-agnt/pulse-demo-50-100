@@ -63,7 +63,7 @@ export default function AgentStudioPrompt({ v }: Props) {
             <path d="M12 3.5 13.6 8 18 9.6 13.6 11.2 12 15.7 10.4 11.2 6 9.6 10.4 8Z" />
             <path d="M18.5 15.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7Z" />
           </svg>
-          <input value={v.tuneDraft ?? ""} onChange={v.setTuneDraft} onKeyDown={v.onTuneKey} placeholder="Ask for a change — “stop mentioning margin”" style={{"flex":"1","minWidth":"0","height":"100%","border":"0","outline":"0","background":"none","fontSize":"13.5px","color":"var(--ink)"}} />
+          <input value={v.tuneDraft ?? ""} onChange={v.setTuneDraft} onKeyDown={v.onTuneKey} placeholder="Ask for a change, for example “stop mentioning margin”" style={{"flex":"1","minWidth":"0","height":"100%","border":"0","outline":"0","background":"none","fontSize":"13.5px","color":"var(--ink)"}} />
           <span style={{"flex":"none","fontFamily":"var(--mono)","fontSize":"8.5px","letterSpacing":"0.1em","color":"var(--faint)","whiteSpace":"nowrap"}}>
             {"↵ SEND"}
           </span>

@@ -16,7 +16,7 @@ export default function RecordsOntology({ v }: Props) {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{"flex":"none"}}>
                 <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
               </svg>
-              <input value={v.onto?.query ?? ""} onChange={v.onto?.setQuery} onKeyDown={v.onto?.onKey} placeholder="e.g. invoices, approvals" style={{"flex":"1","minWidth":"0","border":"0","outline":"0","background":"none","fontSize":"12.5px","color":"var(--ink)"}} />
+              <input value={v.onto?.query ?? ""} onChange={v.onto?.setQuery} onKeyDown={v.onto?.onKey} placeholder="e.g. records, approvals" style={{"flex":"1","minWidth":"0","border":"0","outline":"0","background":"none","fontSize":"12.5px","color":"var(--ink)"}} />
               {v.onto?.hasQuery && (
                 <>
                   <button onClick={v.onto?.clear} aria-label="Clear" style={{"flex":"none","width":"18px","height":"18px","border":"0","borderRadius":"6px","background":"var(--chip)","color":"var(--dim)","cursor":"pointer","display":"flex","alignItems":"center","justifyContent":"center"}}>
@@ -81,14 +81,14 @@ export default function RecordsOntology({ v }: Props) {
           </div>
           <div style={{"padding":"16px 18px","background":"var(--surface)","border":"1px solid var(--border)","borderRadius":"var(--card-r,18px)","backdropFilter":"blur(20px) saturate(1.3)","boxShadow":"var(--card-shadow)"}}>
             <div style={{"fontFamily":"var(--mono)","fontSize":"9px","letterSpacing":"0.13em","color":"var(--faint)"}}>
-              {"GRAPH"}
+              {"ILLUSTRATIVE GRAPH"}
             </div>
             <div style={{"display":"flex","alignItems":"baseline","gap":"8px","marginTop":"8px"}}>
               <span style={{"fontFamily":"var(--mono)","fontSize":"26px","fontWeight":"var(--fig-weight,inherit)","letterSpacing":"-1px","color":"var(--ink)"}}>
                 {txt(v.graph?.nodeCount)}
               </span>
               <span style={{"fontSize":"11.5px","color":"var(--dim)"}}>
-                {"records"}
+                {"nodes"}
               </span>
             </div>
             <div style={{"display":"flex","alignItems":"baseline","gap":"8px","marginTop":"4px"}}>
@@ -96,14 +96,14 @@ export default function RecordsOntology({ v }: Props) {
                 {txt(v.graph?.edgeCount)}
               </span>
               <span style={{"fontSize":"11.5px","color":"var(--dim)"}}>
-                {"relationships"}
+                {"links (sample layout, not your data)"}
               </span>
             </div>
           </div>
           <div style={{"padding":"16px 18px","background":"var(--surface)","border":"1px solid var(--border)","borderRadius":"var(--card-r,18px)","backdropFilter":"blur(20px) saturate(1.3)","boxShadow":"var(--card-shadow)"}}>
             <div style={{"display":"flex","alignItems":"baseline","gap":"8px"}}>
               <span style={{"flex":"1","fontFamily":"var(--mono)","fontSize":"9px","letterSpacing":"0.13em","color":"var(--faint)"}}>
-                {"LIVE QUERIES"}
+                {"PATH SEARCHES"}
               </span>
               <span style={{"fontFamily":"var(--mono)","fontSize":"9px","color":"var(--faint)"}}>
                 {txt(v.graph?.running)}

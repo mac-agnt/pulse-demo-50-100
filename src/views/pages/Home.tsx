@@ -8,7 +8,7 @@ type Props = { v: any };
 export default function Home({ v }: Props) {
   return (
     <>
-      <div style={{"position":"relative","display":"flex","gap":"20px","height":"100%","padding":"0 22px 22px"}}>
+      <div className="pk-home" style={{"position":"relative","display":"flex","gap":"20px","height":"100%","padding":"0 22px 22px"}}>
         <div style={css(v.homeCanvasStyle)} />
         <div style={css(v.chatColumnStyle)}>
           {v.heliosEmpty && (
@@ -31,7 +31,7 @@ export default function Home({ v }: Props) {
                       </svg>
                     </span>
                   </button>
-                  <h1 style={{"margin":"14px 0 0","maxWidth":"16ch","display":"flex","flexWrap":"wrap","alignItems":"baseline","justifyContent":"center","gap":"8px 14px","fontSize":"clamp(28px,4.6vh,48px)","fontWeight":"500","letterSpacing":"-1px","lineHeight":"1"}}>
+                  <h1 style={{"margin":"14px 0 0","maxWidth":"16ch","display":"flex","flexWrap":"wrap","alignItems":"baseline","justifyContent":"center","gap":"8px 14px","fontSize":v.homeCompact ? "clamp(22px,3vh,30px)" : "clamp(28px,4.6vh,48px)","fontWeight":"500","letterSpacing":v.homeCompact ? "-.5px" : "-1px","lineHeight":"1"}}>
                     <span style={{"color":"var(--ink)"}}>
                       {txt(v.greetingPrefix)}
                     </span>
