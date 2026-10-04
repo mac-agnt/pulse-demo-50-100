@@ -1,5 +1,6 @@
-/* Shell pieces driven by the core: the scope control in the top bar, the
-   viewer card and role preview in the rail, and the scope-change notice. */
+/* Shell pieces driven by the core: the scope control, the scope-change notice,
+   the discreet demo indicator with its Demo menu (role preview, reset, clean
+   template) and the viewer chip in the top bar. */
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -76,59 +77,94 @@ function roleLine(core: ReturnType<typeof useCore>["core"], personId: string) {
   return label + (where ? ", " + where : "");
 }
 
-/** Rail card: who you are previewing as, and the sample-mode controls. */
-export function ViewerCard({ open }: { open: boolean }) {
+/** The one persistent demo indicator: a discreet pill in the rail that says
+    which data is loaded and opens the Demo menu (role preview, reset, clean
+    template). Replaces the large "Previewing as" card. */
+export function DemoIndicator({ open }: { open: boolean }) {
+  const { core, q } = useCore();
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState<{ left: number; bottom: number }>({ left: 16, bottom: 80 });
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const sample = core.mode === "sample";
+  const label = sample ? "Sample data" : "Clean template";
+  useEffect(() => {
+    if (!show) return;
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setPos({ left: Math.max(8, Math.min(r.left, window.innerWidth - 308)), bottom: Math.max(8, window.innerHeight - r.top + 8) });
+    const off = (e: MouseEvent) => { if (!btn.current?.contains(e.target as Node) && !menu.current?.contains(e.target as Node)) setShow(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { setShow(false); btn.current?.focus(); } };
+    document.addEventListener("mousedown", off);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc); };
+  }, [show]);
+  const me = q.viewer.person;
+  return (
+    <>
+      <button ref={btn} type="button" className={"dm-pill" + (open ? "" : " dm-pill--shut") + (sample ? "" : " dm-pill--clean")}
+        aria-haspopup="dialog" aria-expanded={show} onClick={() => setShow(!show)}
+        title={label + ". Previewing as " + me.name + ". Open the Demo menu"} aria-label={label + ". Previewing as " + me.name + ". Open the Demo menu"}>
+        {open ? (<><span className="dm-dot" aria-hidden="true" /><span>{label}</span><span className="dm-who">{me.name.split(" ")[0]}</span></>) : (sample ? "DEMO" : "CLEAN")}
+      </button>
+      {show && createPortal(
+        <div ref={menu} className="dm-menu pk" role="dialog" aria-label="Demo" style={{ left: pos.left, bottom: pos.bottom }}>
+          <DemoMenu onDone={() => setShow(false)} />
+        </div>,
+        (document.querySelector("[data-theme]") || document.body) as Element
+      )}
+    </>
+  );
+}
+
+function DemoMenu({ onDone }: { onDone: () => void }) {
   const { core, session, q } = useCore();
   const [confirm, setConfirm] = useState<null | "sample" | "clean">(null);
+  const sample = core.mode === "sample";
   const me = q.viewer.person;
-  const preview = core.mode === "sample" ? SAMPLE_PREVIEW_PEOPLE.filter((id) => core.data.people.some((p) => p.id === id)) : core.data.people.filter((p) => p.kind === "staff").map((p) => p.id);
-  if (!open) {
-    return (
-      <div className="pk" title={me.name + " · " + (core.mode === "sample" ? "Sample data, role preview" : "Clean template")}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 0" }}>
-        <span style={{ width: 40, height: 40, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600 }}>{q.initials(me.id)}</span>
-        <span className="pk-chip pk-tone-warn pk-chip--plain" style={{ fontSize: 9, height: 18, padding: "0 6px" }}>{core.mode === "sample" ? "SAMPLE" : "CLEAN"}</span>
-      </div>
-    );
-  }
+  const preview = sample ? SAMPLE_PREVIEW_PEOPLE.filter((id) => core.data.people.some((p) => p.id === id))
+    : core.data.people.filter((p) => p.kind === "staff").map((p) => p.id);
   return (
-    <div className="pk" style={{ margin: "6px 4px 4px", padding: "14px 14px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 18 }}>
+    <>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="pk-eyebrow pk-grow">{core.mode === "sample" ? "Previewing as" : "Signed in (demo)"}</span>
-        <span className="pk-chip pk-tone-warn pk-chip--plain" title="Sample data. Integrations, sign-in, AI and scheduling are simulated." style={{ fontSize: 9.5, height: 19 }}>
-          {core.mode === "sample" ? "SAMPLE DATA" : "CLEAN TEMPLATE"}
-        </span>
+        <span className="pk-eyebrow pk-grow">Demo</span>
+        <span className={"pk-chip pk-chip--plain " + (sample ? "pk-tone-warn" : "pk-tone-neutral")} style={{ fontSize: 10 }}>{sample ? "Sample data" : "Clean template"}</span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-        <span style={{ width: 36, height: 36, flex: "none", borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 600 }}>{q.initials(me.id)}</span>
+      <div className="dm-row">
+        <span style={{ width: 32, height: 32, flex: "none", borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600 }}>{q.initials(me.id)}</span>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me.name}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{me.name}</div>
           <div style={{ fontSize: 11.5, color: "var(--faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{roleLine(core, me.id)}</div>
         </div>
       </div>
       {preview.length > 1 && (
-        <label style={{ display: "block", marginTop: 10 }}>
+        <label style={{ display: "block", marginTop: 12 }}>
           <span className="pk-help" style={{ display: "block", marginBottom: 4 }}>Role preview (not sign-in)</span>
-          <select className="pk-select" value={session.viewerId} onChange={(e) => store.setViewer(e.target.value)} style={{ height: 30, fontSize: 12 }}>
-            {preview.map((id) => <option key={id} value={id}>{q.name(id)} · {roleLine(core, id)}</option>)}
+          <select className="pk-select" value={session.viewerId} onChange={(e) => store.setViewer(e.target.value)} style={{ height: 32, fontSize: 12.5 }}>
+            {preview.map((id) => <option key={id} value={id}>{q.name(id)}, {roleLine(core, id)}</option>)}
           </select>
         </label>
       )}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-        {confirm ? (
-          <>
-            <span className="pk-help pk-grow" style={{ alignSelf: "center" }}>{confirm === "clean" ? "Switch to the empty template?" : "Reset sample data?"} Local changes are lost.</span>
-            <button className="pk-btn pk-btn--sm pk-btn--primary" onClick={() => { store.reset(confirm); setConfirm(null); }}>Yes</button>
-            <button className="pk-btn pk-btn--sm" onClick={() => setConfirm(null)}>No</button>
-          </>
-        ) : (
-          <>
-            <button className="pk-btn pk-btn--sm" style={{ flex: "1 1 auto", padding: "0 8px" }} onClick={() => setConfirm("sample")}>{core.mode === "sample" ? "Reset sample" : "Load sample"}</button>
-            {core.mode === "sample" && <button className="pk-btn pk-btn--sm" style={{ flex: "1 1 auto", padding: "0 8px" }} onClick={() => setConfirm("clean")}>Clean template</button>}
-          </>
-        )}
-      </div>
-    </div>
+      <div className="dm-note">Role preview shows what each role can see and do. It is not authentication.</div>
+      {confirm ? (
+        <div className="dm-actions" role="alertdialog" aria-label="Confirm">
+          <span className="pk-help">{confirm === "clean" ? "Switch to the empty clean template?" : sample ? "Reset the sample data?" : "Load the sample data?"} Local changes in this browser are lost.</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button type="button" className="pk-btn pk-btn--sm pk-btn--primary" onClick={() => { store.reset(confirm); setConfirm(null); onDone(); }}>
+              {confirm === "clean" ? "Switch to clean template" : sample ? "Reset sample" : "Load sample"}
+            </button>
+            <button type="button" className="pk-btn pk-btn--sm" onClick={() => setConfirm(null)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="dm-actions">
+          <button type="button" className="pk-btn pk-btn--sm" onClick={() => setConfirm("sample")}>{sample ? "Reset sample data" : "Load sample data"}</button>
+          {sample && <button type="button" className="pk-btn pk-btn--sm" onClick={() => setConfirm("clean")}>Switch to clean template</button>}
+        </div>
+      )}
+      <div className="dm-note">{sample
+        ? "Sample organisation, stored only in this browser. Connections, sign-in, AI and scheduling are simulated; Settings, Connections says what each needs."
+        : "Empty template with no sample people, records or agents. Stored only in this browser."}</div>
+    </>
   );
 }
 

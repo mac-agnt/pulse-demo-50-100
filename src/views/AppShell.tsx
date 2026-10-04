@@ -16,10 +16,14 @@ import HeliosMini from "./overlays/HeliosMini";
 import AgentStudio from "./overlays/AgentStudio";
 import CommandPalette from "./overlays/CommandPalette";
 import BackgroundGallery from "./overlays/BackgroundGallery";
-import { BrandMark, BrandName, ScopeNotice, ViewerCard, ViewerChip } from "../ui/shell";
+import { BrandMark, BrandName, DemoIndicator, ScopeNotice, ViewerChip } from "../ui/shell";
 import { ModuleSwitch, PageSwitch, ScopeSwitch } from "../ui/topnav";
+import { ModuleHost } from "../ui/modules/registry";
+import { pageLabel, store } from "../core";
 
-const ScopeSwitchSlot = ({ hidden }: { hidden: boolean }) => (hidden ? null : <ScopeSwitch />);
+const ScopeSwitchSlot = ({ hidden }: { hidden: boolean }) => (hidden ? null : <ScopeSwitch compact />);
+/* Visible page tabs need room; below this width the page menu is used. */
+const roomForTabs = () => typeof window === "undefined" || window.innerWidth >= 900;
 import { CoreToast } from "../ui/kit";
 import ContactsView from "../ui/records/ContactsView";
 import RecordsBrowse from "../ui/records/RecordsBrowse";
@@ -61,9 +65,9 @@ export default function AppShell({ v }: Props) {
         {arr(v.nav).map((item: any, i0: number) => (
           <Fragment key={i0}>
             {item?.isDivider && (
-              <>
-                <div style={{"width":"20px","height":"1px","background":"var(--track)","margin":"7px 0"}} />
-              </>
+              item?.groupLabel
+                ? <div className="pk-railgroup" aria-hidden="true">{item.groupLabel}</div>
+                : <div style={{"width":"20px","height":"1px","background":"var(--track)","margin":"7px 0"}} />
             )}
             {item?.isItem && (
               <>
@@ -96,7 +100,7 @@ export default function AppShell({ v }: Props) {
         <div style={{"flex":"1","minHeight":"10px"}} />
         {v.railOpen && (
           <>
-            <ViewerCard open />
+            <DemoIndicator open />
             <div style={{"margin":"4px 4px 4px","padding":"6px","background":"var(--surface)","border":"1px solid var(--border)","borderRadius":"18px"}}>
               <button className="ix4" onClick={v.goSettings} onPointerEnter={v.setBtnIn} onPointerLeave={v.setBtnOut} style={{"position":"relative","width":"100%","height":"46px","marginTop":"16px","display":"flex","alignItems":"center","gap":"10px","padding":"0 5px 0 16px","background":"var(--surface-2)","border":"1px solid var(--border)","borderRadius":"999px","color":"var(--ink)","fontSize":"14px","fontWeight":"600","letterSpacing":"-.1px","cursor":"pointer","overflow":"hidden","isolation":"isolate","boxShadow":"0 1px 0 rgba(255,255,255,.05) inset,0 2px 8px rgba(0,0,0,.18)","transition":"border-color .4s var(--ease)"}}>
                 <span style={css(v.setDotStyle)} />
@@ -132,7 +136,7 @@ export default function AppShell({ v }: Props) {
                 {"Settings"}
               </span>
             </button>
-            <ViewerCard open={false} />
+            <DemoIndicator open={false} />
           </>
         )}
       </nav>
@@ -157,9 +161,9 @@ export default function AppShell({ v }: Props) {
         <div style={css(v.headerFieldStyle)} />
         <header className="pk-header" style={{"position":"relative","zIndex":"4","flex":"none","width":"100%","padding":"18px 28px","boxSizing":"border-box","borderBottom":"1px solid var(--border)"}}>
           <div style={css(v.headerPillStyle)}>
+            <ModuleSwitch current={v.page} pagesAsTabs={!!v.pagesAsTabs} toggleTabs={v.togglePagesAsTabs} canTabs={roomForTabs() && (v.contextNav || []).length > 0} />
             <ScopeSwitchSlot hidden={!!v.isSettings} />
-            <ModuleSwitch current={v.page} />
-            {!v.pagesAsTabs && <PageSwitch module={v.page} tabs={v.contextNav || []} asTabs={false} toggleTabs={v.togglePagesAsTabs} />}
+            {!v.pagesAsTabs && <PageSwitch module={pageLabel(store.get().core.config, v.page)} tabs={v.contextNav || []} toggleTabs={v.togglePagesAsTabs} canTabs={roomForTabs()} />}
             {v.pagesAsTabs && v.showPillNav && (
               <>
                 <div style={css(v.navGroupStyle)}>
@@ -203,7 +207,6 @@ export default function AppShell({ v }: Props) {
                 </div>
               </>
             )}
-            {v.pagesAsTabs && v.showPillNav && (v.contextNav || []).length > 0 && <button type="button" className="tn-btn tn-btn--page" title="Show pages as a menu" aria-label="Show pages as a menu" onClick={v.togglePagesAsTabs}>{"Pages as menu"}</button>}
             <div style={css(cat("flex:", v.searchWrapFlex, ";min-width:42px;display:flex;align-items:center;justify-content:center;padding:0 6px"))}>
               <button className="ix7" onClick={v.openPalette} title={v.searchHint} style={css(v.searchBarStyle)}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{"flex":"none"}}>
@@ -341,6 +344,7 @@ export default function AppShell({ v }: Props) {
           {v.isSettings && <Settings v={v} />}
           {v.isDashboard && <Dashboard v={v} />}
           {v.isAgents && <Agents v={v} />}
+          {v.isModulePage && <ModuleHost v={v} />}
         </div>
       </main>
       {v.showFab && (

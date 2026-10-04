@@ -3,7 +3,7 @@
    request forms, approval rules, service deadlines, workflow templates,
    sources and mappings. Pages read it; Settings edits it. */
 
-import type { OrgConfig, RoleDef, MetricDef, DashboardDef, SlaPolicyDef, Terminology, RecordTypeDef } from "./types";
+import type { OrgConfig, RoleDef, MetricDef, DashboardDef, SlaPolicyDef, Terminology, RecordTypeDef, AgentToolDef, AgentTemplateDef, OrchestrationSettings, ProjectSettings } from "./types";
 
 export const DEFAULT_TERMS: Terminology = {
   organisation: "Organisation",
@@ -17,12 +17,14 @@ export const DEFAULT_TERMS: Terminology = {
 /* Role names and permissions are defaults, editable per client. */
 export const DEFAULT_ROLES: RoleDef[] = [
   { id: "contributor", label: "Contributor", description: "Works their own and their team's tasks and requests.",
-    permissions: ["records.view", "records.edit", "views.share"] },
+    permissions: ["records.view", "records.edit", "views.share", "comments.write"] },
   { id: "team_manager", label: "Team manager", description: "Oversees a team or unit: assigns work, decides approvals in scope.",
-    permissions: ["records.view", "records.edit", "tasks.manage", "approvals.decide", "approvals.delegate", "workflows.operate", "export", "views.share", "audit.view"] },
+    permissions: ["records.view", "records.edit", "tasks.manage", "approvals.decide", "approvals.delegate", "workflows.operate", "export", "views.share", "audit.view",
+      "projects.manage", "finance.view", "purchasing.manage", "standards.review", "agents.run", "comments.write"] },
   { id: "admin", label: "Administrator", description: "Configures the organisation, structure, rules and connections.",
     permissions: ["records.view", "records.edit", "records.merge", "tasks.manage", "approvals.decide", "approvals.delegate",
-      "workflows.operate", "settings.edit", "export", "audit.view", "agents.manage", "views.share"] }
+      "workflows.operate", "settings.edit", "export", "audit.view", "agents.manage", "views.share",
+      "projects.manage", "finance.view", "finance.manage", "purchasing.manage", "standards.review", "agents.run", "updates.publish", "comments.write"] }
 ];
 
 /* Neutral measures any organisation has once work flows through Pulse. */
@@ -87,6 +89,58 @@ export const GENERIC_RECORD: RecordTypeDef = {
   ]
 };
 
+/* Tools an agent can be given. Restricted tools always wait for a human
+   approval in Work; external tools stay unavailable until their source is connected. */
+export const DEFAULT_AGENT_TOOLS: AgentToolDef[] = [
+  { id: "read.records", label: "Read records", description: "Look up records, fields and relationships in scope.", effect: "read", restricted: false },
+  { id: "read.files", label: "Read documents", description: "Read permitted documents and cite the version used.", effect: "read", restricted: false },
+  { id: "read.work", label: "Read work", description: "Read tasks, requests, approvals and runs in scope.", effect: "read", restricted: false },
+  { id: "write.task", label: "Create tasks", description: "Create or update tasks in Work.", effect: "write", restricted: false },
+  { id: "write.request", label: "Draft requests", description: "Draft a request for a person to submit.", effect: "write", restricted: false },
+  { id: "write.record", label: "Correct record fields", description: "Change a record field.", effect: "write", restricted: true },
+  { id: "write.issue", label: "Resolve data issues", description: "Resolve a data-quality issue.", effect: "write", restricted: true },
+  { id: "project.update", label: "Draft project updates", description: "Write a dated progress update for an owner to post.", effect: "write", restricted: false, module: "projects" },
+  { id: "project.milestone", label: "Propose milestone changes", description: "Propose a new milestone date.", effect: "write", restricted: true, module: "projects" },
+  { id: "finance.read", label: "Read budgets and invoices", description: "Read budgets, payables and receivables.", effect: "read", restricted: false, module: "finance" },
+  { id: "purchasing.match", label: "Match invoices", description: "Compare invoices with orders and receipts and flag differences.", effect: "write", restricted: false, module: "purchasing" },
+  { id: "standards.precheck", label: "Pre-check evidence", description: "Compare received evidence with its requirement. Never accepts it.", effect: "read", restricted: false, module: "standards" },
+  { id: "updates.draft", label: "Draft company updates", description: "Draft a recap for an authorised person to publish.", effect: "write", restricted: false },
+  { id: "notify.email", label: "Send email", description: "Send an email from the organisation.", effect: "external", restricted: true, requiresSourceId: "s-email" }
+];
+
+/* Reusable capabilities, not departmental job titles. */
+export const DEFAULT_AGENT_TEMPLATES: AgentTemplateDef[] = [
+  { id: "tpl-briefing", label: "Briefing", description: "Summarises what changed in a scope and links the evidence.",
+    inputs: ["Scope", "Period"], outputs: ["Briefing with links"], tools: ["read.records", "read.work", "read.files"], defaultTrigger: { kind: "schedule", detail: "Weekdays 07:30" }, workerOk: false },
+  { id: "tpl-coordination", label: "Work coordination", description: "Accepts a goal, splits it into subtasks and routes them to capability agents.",
+    inputs: ["Goal", "Scope"], outputs: ["Combined outcome with evidence"], tools: ["read.work", "write.task"], defaultTrigger: { kind: "manual", detail: "Started by a person" }, workerOk: false },
+  { id: "tpl-project", label: "Project monitoring", description: "Watches milestones, dependencies and risks and drafts updates.",
+    inputs: ["Project"], outputs: ["Risk notes", "Draft update"], tools: ["read.work", "read.records", "project.update", "project.milestone"], defaultTrigger: { kind: "event", detail: "When a milestone moves" }, workerOk: true, module: "projects" },
+  { id: "tpl-docreview", label: "Document review", description: "Checks a document against its requirement and lists gaps for a reviewer.",
+    inputs: ["Document", "Requirement"], outputs: ["Gap list"], tools: ["read.files", "standards.precheck"], defaultTrigger: { kind: "delegated", detail: "Delegated by a coordinator" }, workerOk: true },
+  { id: "tpl-quality", label: "Data quality", description: "Finds missing, duplicate and conflicting data and proposes fixes.",
+    inputs: ["Record type", "Scope"], outputs: ["Issues", "Proposed corrections"], tools: ["read.records", "write.task", "write.issue"], defaultTrigger: { kind: "schedule", detail: "Daily 06:00" }, workerOk: true },
+  { id: "tpl-triage", label: "Request triage", description: "Reads new requests, checks evidence and routes them to the right queue.",
+    inputs: ["Request"], outputs: ["Routing note", "Missing evidence list"], tools: ["read.work", "write.task", "write.request"], defaultTrigger: { kind: "event", detail: "When a request is submitted" }, workerOk: true }
+];
+
+export const DEFAULT_ORCHESTRATION: OrchestrationSettings = {
+  adapter: "sample",
+  connectionRequirement: "No agent runtime is connected. Runs use the local sample engine and are marked Simulated. To run agents for real, connect a runtime in Settings, Systems, Connections; provider keys are held server-side, never in the browser or in agent instructions.",
+  defaultLimits: { maxDepth: 2, maxChildren: 3, maxConcurrentRuns: 2, maxMinutes: 15 },
+  ceiling: { maxDepth: 3, maxChildren: 5, maxConcurrentRuns: 5, maxMinutes: 60 }
+};
+
+export const DEFAULT_PROJECTS: ProjectSettings = {
+  label: "Project", plural: "Projects",
+  types: [{ id: "standard", label: "Standard", phases: [
+    { id: "initiate", label: "Initiate" }, { id: "plan", label: "Plan" }, { id: "deliver", label: "Deliver" }, { id: "close", label: "Close" }], fields: [] }],
+  templates: [],
+  progressBasis: "milestones",
+  atRiskSlipDays: 5,
+  cascadeMilestoneMoves: false
+};
+
 export function baseConfig(): OrgConfig {
   return {
     workspace: { id: "workspace", name: "Your organisation", shortName: "YO" },
@@ -130,7 +184,20 @@ export function baseConfig(): OrgConfig {
       offboardingChecklist: ["Handover notes written", "Open work reassigned", "Access removed", "Equipment returned"],
       probationMonths: 6,
       accessReviewEveryDays: 180
-    }
+    },
+    /* Projects and People are on in the shared build; the rest are opt-in. */
+    modules: {
+      projects: { enabled: true }, people: { enabled: true },
+      finance: { enabled: false }, purchasing: { enabled: false }, standards: { enabled: false }
+    },
+    locations: [],
+    projects: structuredClone(DEFAULT_PROJECTS),
+    finance: { reportingCurrency: "EUR" },
+    purchasing: { tolerancePercent: 2, requireReceipt: true },
+    standards: { requirements: [], checks: [], acknowledgePolicyIds: [] },
+    agentTools: DEFAULT_AGENT_TOOLS.map((t) => ({ ...t })),
+    agentTemplates: structuredClone(DEFAULT_AGENT_TEMPLATES),
+    orchestration: structuredClone(DEFAULT_ORCHESTRATION)
   };
 }
 

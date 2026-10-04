@@ -26,7 +26,9 @@ export function waitingOnMe(q: Q): Approval[] {
 }
 
 export function workCounts(q: Q) {
+  const me = q.viewer.person.id;
   return {
+    mine: q.tasks({ ignoreScope: true }).filter((t) => q.isOpenTask(t) && t.assigneeId === me).length,
     tasks: q.tasks().filter((t) => q.isOpenTask(t)).length,
     approvals: waitingOnMe(q).length,
     workflows: q.runs().filter((r) => r.status === "failed" || r.status === "awaiting_input").length,

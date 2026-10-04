@@ -4,11 +4,13 @@
    execution of the approved action as a separate step. */
 
 import { useCore, openObject, ms } from "../../core";
-import type { Approval, Decision, RequestItem } from "../../core";
-import { Chip, KV, LABEL, NoAccess, Notice, PersonName, Section, SidePanel, toneOf } from "../kit";
-import { formOf, History, LinkRow, Muted, Rows, useClock, REQ_TONE, type OpenPanel } from "./shared";
+import type { Approval, Decision, RequestFormDef, RequestItem } from "../../core";
+import { Button, Chip, KV, LABEL, NoAccess, Notice, PersonName, Section, SidePanel, toneOf } from "../kit";
+import { formOf, History, isAgent, LinkRow, Muted, Rows, useClock, REQ_TONE, type OpenPanel } from "./shared";
 import { ProposedChange } from "./ProposedChange";
 import { DecisionActions, ExecutionSection, RequesterActions } from "./ApprovalActions";
+import { currentStage } from "../selectors";
+import { Comments } from "../collab/Comments";
 
 export interface ApprovalPanelProps { approvalId?: string; requestId?: string; onClose(): void; onOpen?: OpenPanel; focusDecision?: boolean }
 
@@ -52,6 +54,10 @@ function Body({ req, a, onClose, onOpen, focusDecision }: { req: RequestItem; a?
       ]} />
 
       {a?.policyException && <div style={{ marginTop: 14 }}><Notice tone="warn">{a.policyException}</Notice></div>}
+
+      <AgentOrigin req={req} />
+
+      <Section label="Decision summary"><Summary req={req} a={a} form={form} /></Section>
 
       <Section label="Proposed change"><ProposedChange req={req} form={form} /></Section>
 
@@ -121,6 +127,8 @@ function Body({ req, a, onClose, onOpen, focusDecision }: { req: RequestItem; a?
 
       <Section label="Approved action"><ExecutionSection req={req} a={a} form={form} /></Section>
 
+      <Section label="Comments"><Comments objectType="request" objectId={req.id} /></Section>
+
       <Section label="History"><History ids={[req.id, ...(a ? [a.id] : [])]} /></Section>
     </SidePanel>
   );
@@ -156,5 +164,57 @@ function Decisions({ a }: { a: Approval }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Requests raised by an agent name the agent and link to the run that raised them. */
+function AgentOrigin({ req }: { req: RequestItem }) {
+  const { core, q } = useCore();
+  const runId = typeof req.fields.agentRunId === "string" ? req.fields.agentRunId : undefined;
+  const agentId = isAgent(req.requesterId) ? req.requesterId : isAgent(req.createdBy) ? req.createdBy : undefined;
+  const run = runId ? core.data.agentRuns.find((r) => r.id === runId) : undefined;
+  const agent = core.config.agents.find((x) => x.id === (agentId || run?.agentId));
+  if (!agent && !runId) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <Notice>
+        <div>Raised by {agent ? agent.name + ", an agent" : "an agent run"}{agent ? ". " + q.name(agent.responsibleId) + " is the person responsible for it" : ""}. An agent cannot approve its own restricted action: a person decides here, and the run waits for that decision.</div>
+        {runId && (
+          <div className="wk-row" style={{ marginTop: 8 }}>
+            <Button size="sm" onClick={() => openObject("agentRun", runId)}>Open the run{run ? " " + run.ref : ""}</Button>
+            {!run && <span className="wk-small">The run is not available to you, or no longer exists.</span>}
+          </div>
+        )}
+      </Notice>
+    </div>
+  );
+}
+
+/** What changed, why it matters, the evidence, who decides and what approval does, in one place. */
+function Summary({ req, a, form }: { req: RequestItem; a?: Approval; form?: RequestFormDef }) {
+  const { core, q } = useCore();
+  const stage = a ? currentStage(a) : undefined;
+  const roles = (stage?.eligibleRoles || []).map((r) => core.config.roles.find((x) => x.id === r)?.label || r).join(" or ");
+  const why = ["reason", "summary", "description", "justification", "impact", "message"].map((k) => req.fields[k]).find((v) => typeof v === "string" && v.trim()) as string | undefined;
+  const prev = req.version > 1 ? req.versions.find((x) => x.n === req.version - 1) : undefined;
+  const changed = prev ? Object.keys({ ...prev.fields, ...req.fields }).filter((k) => (prev.fields[k] ?? null) !== (req.fields[k] ?? null)) : [];
+  const label = (k: string) => form?.fields.find((f) => f.key === k)?.label || k;
+  const evidence = req.evidenceFileIds.length;
+  const decision = !a ? (req.status === "draft" ? "Not submitted" : "No approval attached") : LABEL.approval[a.status];
+  return (
+    <dl className="wk-ap-why">
+      <dt>What changed</dt>
+      <dd>{prev ? (changed.length ? "Version " + req.version + " changed " + changed.map(label).join(", ").toLowerCase() + "." : "Resubmitted with no field changes.") : (form?.description || "A new " + (form?.label.toLowerCase() || "request") + ".")}</dd>
+      <dt>Why it matters</dt>
+      <dd>{why || <span className="pk-muted">The requester gave no reason.</span>}</dd>
+      <dt>Evidence</dt>
+      <dd>{evidence ? evidence + " item" + (evidence === 1 ? "" : "s") + " attached, listed below" : form?.evidenceRequired ? <span style={{ color: "var(--warn)" }}>Required, none attached</span> : "None attached, not required"}</dd>
+      <dt>Responsible reviewer</dt>
+      <dd>{stage ? q.name(stage.assigneeId) + " (" + stage.label.toLowerCase() + " stage" + (roles ? ", " + roles : "") + ")" : a ? "No decision is waiting" : "Assigned when submitted"}</dd>
+      <dt>Effect of approval</dt>
+      <dd>{form?.effect.label || "Nothing runs automatically"}{form?.effect.kind === "notify-external" ? ". Needs an external connection." : ""}</dd>
+      <dt>Decision and execution</dt>
+      <dd>Decision: {decision}. Action: {LABEL.exec[req.execution.status]}. They are recorded separately: an approved action can still be waiting to run or fail.</dd>
+    </dl>
   );
 }

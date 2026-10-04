@@ -1,10 +1,10 @@
 /* Metric panel: how a figure is defined and calculated, where it came from,
    how fresh it is, what could not be counted, and the exact objects behind it. */
 
-import { useCore, navigate, fmtDateTime, fmtDate, formatMetric, scopeLabel, type Ctx } from "../../core";
+import { navigate, fmtDateTime, fmtDate, formatMetric, scopeLabel, type Ctx } from "../../core";
 import { Button, Chip, Icon, ICON, KV, Notice, Section, SidePanel } from "../kit";
 import { DrillTable } from "./DrillTable";
-import { comparison, dashStore, metricView, targetText, useDashState, type MetricView } from "./state";
+import { comparison, dashStore, metricView, targetText, useDashCore, useDashState, type MetricView } from "./state";
 
 const AGG: Record<string, string> = { count: "Count", ratio: "Ratio of totals", median: "Median", sum: "Sum" };
 const UNIT: Record<string, string> = { count: "Count", percent: "Percent", hours: "Hours", money: "Money" };
@@ -21,7 +21,7 @@ export function MetricStatusChips({ view }: { view: MetricView }) {
 
 /** The full explanation of one metric in one scope. Used by the metric panel and the unit detail panel. */
 export function MetricDetail({ view, ctx }: { view: MetricView; ctx: Ctx }) {
-  const { core } = useCore();
+  const { core } = useDashCore();
   const r = view.result;
   const d = r.def;
   const tz = core.config.timezone;
@@ -80,15 +80,16 @@ export function MetricDetail({ view, ctx }: { view: MetricView; ctx: Ctx }) {
 
 /** Opened from a band tile, or by a focus hand-off of kind "metric". */
 export function MetricPanel() {
-  const { core, ctx } = useCore();
-  const { metricId } = useDashState();
+  const { core, ctx: base } = useDashCore();
+  const { metricId, metricScope } = useDashState();
+  const ctx = metricScope ? { ...base, scope: metricScope } : base;
   const view = metricId ? metricView(core, ctx, metricId) : null;
-  const close = () => dashStore.set({ metricId: null });
+  const close = () => dashStore.set({ metricId: null, metricScope: null });
   if (!view) return null;
   const r = view.result;
   const toRecords = r.entity === "record" && r.ids.length > 0;
   return (
-    <SidePanel open onClose={close} width={720} eyebrow="Metric" title={r.def.label}
+    <SidePanel open onClose={close} width={720} eyebrow={"Metric · " + scopeLabel(core, ctx.scope)} title={r.def.label}
       chips={<MetricStatusChips view={view} />}
       footer={<>
         {r.entity === "record" && (
@@ -104,8 +105,8 @@ export function MetricPanel() {
           </Button>
         )}
         {r.entity === "person" && (
-          <Button variant="primary" onClick={() => { close(); navigate({ page: "Work", section: "people" }); }}>
-            Open Work, People
+          <Button variant="primary" onClick={() => { close(); navigate({ page: "People", section: "directory" }); }}>
+            Open People
           </Button>
         )}
         <span className="pk-grow" />

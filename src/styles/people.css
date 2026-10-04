@@ -68,3 +68,8 @@
   .pp-li > .pp-li-main + *{margin-left:42px}
 }
 @media (prefers-reduced-motion:reduce){ .pp-row,.pp-li,.pp-bar{animation:none} }
+
+/* People module (src/ui/peoplemod) */
+.pm-bar{display:inline-block;width:90px;height:5px;border-radius:3px;background:var(--track);overflow:hidden;flex:none}
+.pm-bar span{display:block;height:5px;transform-origin:left center}
+.pm-page .pp-grid{margin-top:12px}

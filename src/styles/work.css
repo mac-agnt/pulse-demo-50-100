@@ -234,3 +234,70 @@ button.wk-line:focus-visible,.wk-routine:focus-visible{outline:2px solid var(--a
   .wk-box-check:hover{transform:none}
   .wk-toggle span,.wk-ring svg circle{transition:none}
 }
+
+/* ── Comments (src/ui/collab/Comments.tsx) ──────────────────────────────── */
+.cm-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.cm-item{padding:10px 0;border-top:1px solid var(--border)}
+.cm-item:first-child{border-top:0;padding-top:2px}
+.cm-head{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.cm-when{margin-left:auto;font-size:11px;color:var(--faint);white-space:nowrap}
+.cm-text{font-size:13px;color:var(--body);line-height:1.55;margin-top:5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.cm-mention{color:var(--accent);font-weight:500}
+.cm-compose{margin-top:12px}
+.cm-input{margin-top:6px;width:100%;box-sizing:border-box}
+.cm-suggest{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.cm-chip{height:28px;padding:0 11px;border:1px solid var(--chip-border);background:var(--chip);border-radius:var(--r-ctl,9px);font:inherit;font-size:12px;color:var(--body);cursor:pointer}
+.cm-chip:hover{border-color:var(--accent-line);color:var(--ink)}
+.cm-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── V2 Work layout: compact headers, grouped lists, requests, calendar ── */
+.wk-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:6px 4px 16px}
+.wk-head-main{flex:1;min-width:220px}
+.wk-head-row{display:flex;align-items:center;gap:10px;margin-top:6px}
+.wk-head-t{margin:0;font-size:28px;font-weight:500;letter-spacing:-.8px;line-height:1.1}
+.wk-task--compact{padding:11px 22px;align-items:center}
+.wk-task--compact .wk-meta{margin-top:5px}
+.wk-task--compact .wk-task-title{font-size:14px}
+.wk-group-h{display:flex;align-items:center;gap:10px;margin:0 -22px;padding:9px 22px;border-top:1px solid var(--border);background:var(--surface-faint);font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+.wk-group-h b{font-weight:500;color:var(--dim)}
+.wk-plink{all:unset;cursor:pointer;font-size:12px;color:var(--accent);display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-plink:hover{text-decoration:underline}
+.wk-plink:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.wk-timer-mini{display:flex;align-items:center;gap:10px;height:44px;padding:0 8px 0 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md,12px);max-width:100%;box-sizing:border-box}
+.wk-timer-mini-t{font-family:var(--mono);font-size:15px;color:var(--ink);min-width:48px}
+.wk-timer-mini-l{font-size:12px;color:var(--dim);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-timer-mini .wk-icon-btn{width:32px;height:32px;border-radius:var(--r-ctl,9px)}
+.wk-table{width:100%;border-collapse:collapse;font-size:14px}
+.wk-table th{text-align:left;font-weight:500;font-size:11.5px;color:var(--faint);padding:10px 14px;border-top:1px solid var(--border);background:var(--surface-faint);white-space:nowrap}
+.wk-table td{padding:0 14px;height:46px;border-top:1px solid var(--border);color:var(--body);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}
+.wk-table tbody tr{cursor:pointer;transition:background .16s var(--ease)}
+.wk-table tbody tr:hover,.wk-table tbody tr[data-selected]{background:var(--surface-2)}
+.wk-table tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.wk-table .wk-strong{color:var(--ink)}
+.wk-tcard{padding:0;overflow:hidden}
+.wk-tcard .wk-viewbar{padding:14px 18px 12px}
+.wk-scroll{overflow-x:auto;max-width:100%}
+.wk-ap-why{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 14px;font-size:12.5px;margin:0}
+.wk-ap-why dt{color:var(--dim)}
+.wk-ap-why dd{margin:0;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+.wk-layers{display:flex;flex-wrap:wrap;gap:6px}
+.wk-cal--v2 .wk-day{height:auto;min-height:150px;cursor:default}
+.wk-cal--v2 .wk-cal-chip{cursor:pointer;border:0;border-left:2.5px solid var(--neutral);font:inherit;font-size:10.5px;text-align:left;width:100%;box-sizing:border-box}
+.wk-cal--v2 .wk-cal-chip:hover{background:var(--surface-2)}
+.wk-cal--v2 .wk-cal-chip:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.wk-cal-chip[data-done]{opacity:.6;text-decoration:line-through}
+.wk-cal-chip[data-late]{color:var(--bad)}
+.wk-day-head{display:flex;align-items:center;gap:6px}
+.wk-day-add{all:unset;cursor:pointer;margin-left:auto;font-size:11px;color:var(--faint);padding:0 4px;border-radius:5px}
+.wk-day-add:hover{color:var(--accent)}
+.wk-day-add:focus-visible{outline:2px solid var(--accent)}
+.wk-cal-grid2{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:1180px){ .wk-cal-grid2{grid-template-columns:minmax(0,1fr)} }
+@media (max-width:760px){
+  .wk-head-t{font-size:24px}
+  .wk-task--compact{padding:11px 16px}
+  .wk-group-h{margin:0 -16px;padding:9px 16px}
+  .wk-cal--v2{grid-template-columns:minmax(0,1fr)}
+  .wk-cal--v2 .wk-cal-dn{display:none}
+  .wk-cal--v2 .wk-day{min-height:0}
+}

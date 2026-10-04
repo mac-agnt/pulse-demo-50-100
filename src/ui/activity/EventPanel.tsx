@@ -3,7 +3,7 @@
    touched (sync, human changes, approvals, execution and agent actions). */
 
 import { useMemo, type ReactNode } from "react";
-import { useCore, openObject, fmtDateTime, relative } from "../../core";
+import { useCore, openObject, fmtDateTime, relative, storyKeyOf } from "../../core";
 import type { AuditEvent } from "../../core";
 import { Button, Chip, Empty, Icon, ICON, KV, NoAccess, Notice, PersonName, Section, SidePanel } from "../kit";
 import { ACTOR_KIND_LABEL, ACTOR_KIND_TONE, actionLabel, eventCategory, fieldLabel, fmtValue, objectResolver } from "./eventInfo";
@@ -81,6 +81,12 @@ export default function EventPanel({ eventId, onClose, onSelect }: { eventId: st
         </Section>
       )}
 
+      <Section label="Source evidence">
+        <SourceEvidence e={e} />
+      </Section>
+
+      <ConnectedEvents e={e} onSelect={onSelect} />
+
       {e.simulated && (
         <div style={{ marginTop: 16 }}>
           <Notice tone="warn">This event was simulated in the demo. Nothing outside Pulse was contacted: no email was sent, no scheduler or external system ran.</Notice>
@@ -89,6 +95,52 @@ export default function EventPanel({ eventId, onClose, onSelect }: { eventId: st
 
       {e.recordIds.length > 0 && e.recordIds.map((rid) => <RecordTimeline key={rid} recordId={rid} currentId={e.id} onSelect={onSelect} />)}
     </SidePanel>
+  );
+}
+
+/** Where the event came from: a person or agent in Pulse, Pulse itself, or a source sync with its sync times kept separate. */
+function SourceEvidence({ e }: { e: AuditEvent }) {
+  const { q, core } = useCore();
+  const tz = core.config.timezone;
+  if (e.actorKind === "source") {
+    const src = core.config.sources.find((x) => x.id === e.actorId);
+    const sync = core.data.sync.find((x) => x.sourceId === e.actorId);
+    return (
+      <KV items={[
+        ["Source", src?.label || q.name(e.actorId)],
+        ["Connection", src ? (src.connected ? (src.kind === "sample" ? "Sample source, simulated" : "Connected") : "Not connected" + (src.prerequisite ? ": " + src.prerequisite : "")) : "Unknown"],
+        ["Recorded in Pulse", fmtDateTime(e.at, tz)],
+        ["Last successful sync", sync?.lastSuccessAt ? fmtDateTime(sync.lastSuccessAt, tz) : "None recorded"],
+        ["Last attempt", sync?.lastAttemptAt ? fmtDateTime(sync.lastAttemptAt, tz) + (sync.message ? ", " + sync.message : "") : "None recorded"]
+      ]} />
+    );
+  }
+  const who = e.actorKind === "agent" ? "An agent acting through its permitted tools in Pulse" : e.actorKind === "system" ? "Pulse itself, applying an approved or scheduled step" : "A person, in Pulse";
+  return <KV items={[["Made by", who], ["Recorded", fmtDateTime(e.at, tz)], ["Evidence", e.recordIds.length ? e.recordIds.length + (e.recordIds.length === 1 ? " linked record, timeline below" : " linked records, timelines below") : "No linked records"]]} />;
+}
+
+/** Every visible event in the same story (same run, request or change), oldest first. */
+function ConnectedEvents({ e, onSelect }: { e: AuditEvent; onSelect: (id: string) => void }) {
+  const { q, core } = useCore();
+  const tz = core.config.timezone;
+  const key = storyKeyOf(core, e);
+  const list = q.events({ ignoreScope: true }).filter((x) => storyKeyOf(core, x) === key).sort((a, b) => a.at.localeCompare(b.at));
+  if (list.length <= 1) return null;
+  return (
+    <Section label={"Connected events (" + list.length + ")"}>
+      <div className="pk-list">
+        {list.map((t) => (
+          <button key={t.id} className="pk-li pk-li--btn act-tl" aria-current={t.id === e.id || undefined} onClick={() => onSelect(t.id)}>
+            <span className="act-tl-when pk-mono">{fmtDateTime(t.at, tz)}</span>
+            <span className="pk-grow" style={{ minWidth: 0 }}>
+              <span className="act-tl-sum">{t.summary}</span>
+              <span className="act-tl-meta"><span>{q.name(t.actorId)}</span><span>{actionLabel(t.action)}</span>{t.simulated && <Chip tone="warn" plain>Simulated</Chip>}</span>
+            </span>
+            {t.id === e.id && <Chip tone="accent" plain>This event</Chip>}
+          </button>
+        ))}
+      </div>
+    </Section>
   );
 }
 

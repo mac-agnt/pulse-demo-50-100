@@ -143,7 +143,7 @@ export function LayoutsSection(_p: SectionProps) {
         <Lock on={!canEdit}>
           <div className="st-tbl-wrap">
             <table className="st-tbl" aria-label="Role defaults">
-              <thead><tr><th>Role</th><th>People</th><th>Home opens on</th><th>Default dashboard</th></tr></thead>
+              <thead><tr><th>Role</th><th>People</th><th>Home mode</th><th>Home opens on</th><th>Default dashboard</th></tr></thead>
               <tbody>
                 {core.config.roles.map((r) => {
                   const l = layoutOf(r.id);
@@ -151,6 +151,8 @@ export function LayoutsSection(_p: SectionProps) {
                     <tr key={r.id}>
                       <td>{r.label}</td>
                       <td className="st-c">{people(r.id)}</td>
+                      <td style={{ minWidth: 130 }}><Select ariaLabel={"Home mode for " + r.label} value={l.homeMode || "chat"} onChange={(v) => setLayout(r.id, { homeMode: v as "chat" | "today" })}
+                        options={[{ value: "chat", label: "Chat" }, { value: "today", label: "Today briefing" }]} /></td>
                       <td style={{ minWidth: 170 }}><Select ariaLabel={"Home view for " + r.label} value={l.homeView} onChange={(v) => setLayout(r.id, { homeView: v as RoleLayout["homeView"] })}
                         options={[{ value: "personal", label: "Personal: my work" }, { value: "management", label: "Management: my scope" }]} /></td>
                       <td style={{ minWidth: 170 }}>
@@ -174,10 +176,10 @@ export function LayoutsSection(_p: SectionProps) {
             <ul>
               {changed.map((r) => {
                 const l = layoutOf(r.id);
-                return <li key={r.id}>{r.label} ({people(r.id)} {people(r.id) === 1 ? "person" : "people"}): Home opens in the {l.homeView} view, Dashboard opens on {dashboards.find((db) => db.id === l.dashboardId)?.label || "no dashboard"}.</li>;
+                return <li key={r.id}>{r.label} ({people(r.id)} {people(r.id) === 1 ? "person" : "people"}): Home opens in {l.homeMode === "today" ? "Today" : "Chat"} mode and the {l.homeView} view, Dashboard opens on {dashboards.find((db) => db.id === l.dashboardId)?.label || "no dashboard"}.</li>;
               })}
             </ul>
-            <div style={{ marginTop: 4 }}>Defaults only choose where people start. Anyone can still switch view, and defaults never change what they may see.</div>
+            <div style={{ marginTop: 4 }}>Defaults only choose where people start. Anyone can still switch between Chat and Today (their choice is remembered in their browser), and defaults never change what they may see.</div>
           </Preview>
         )}
       </div>

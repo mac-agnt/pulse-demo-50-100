@@ -6,9 +6,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useCore, scopeLabel, scopeKey } from "../../core";
+import { scopeLabel, scopeKey, metricAvailable } from "../../core";
 import { MetricPanel } from "./MetricPanel";
-import { CORE_MAX, CORE_MIN, basisText, dashStore, deltaText, metricView, useCoreKpis, type MetricView } from "./state";
+import { CORE_MAX, CORE_MIN, basisText, dashStore, deltaText, metricView, useCoreKpis, useDashCore, useDashState, type MetricView } from "./state";
 import "../../styles/dashboard.css";
 
 export function useReducedMotion(): boolean {
@@ -57,13 +57,14 @@ const UP = "M12 19V7 M6 12l6-6 6 6";
 const DOWN = "M12 5v12 M6 12l6 6 6-6";
 
 export function KpiBand({ backdrop, area, backdropColor }: { backdrop?: ReactNode; area: string; backdropColor?: string }) {
-  const { core, ctx } = useCore();
+  const { core, ctx } = useDashCore();
+  const { period } = useDashState();
   const kpis = useCoreKpis(core);
   const [edit, setEdit] = useState(false);
   const views = kpis.ids.map((id) => metricView(core, ctx, id)).filter((x): x is MetricView => !!x);
-  const t = useCountIn(area + "|" + scopeKey(ctx.scope) + "|" + kpis.ids.join(","));
+  const t = useCountIn(area + "|" + scopeKey(ctx.scope) + "|" + kpis.ids.join(",") + "|" + (period || ""));
   const scope = scopeLabel(core, ctx.scope);
-  const enabled = core.config.metrics.filter((m) => m.enabled);
+  const enabled = core.config.metrics.filter((m) => metricAvailable(core.config, m));
   const choices = enabled.filter((m) => !kpis.ids.includes(m.id));
   const floor = Math.min(CORE_MIN, enabled.length);
   const full = kpis.ids.length >= CORE_MAX;
@@ -73,7 +74,7 @@ export function KpiBand({ backdrop, area, backdropColor }: { backdrop?: ReactNod
       {backdrop}
       <div className="db-band-head">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="db-band-eyebrow">{("Core KPIs · " + scope + " · Click any number to see the working").toUpperCase()}</div>
+          <div className="db-band-eyebrow">{("Headline measures · " + scope + (period ? " · last " + period + " days" : "") + " · Click any number to see the working").toUpperCase()}</div>
           <h2 className="db-band-title">{core.config.workspace.name} · {area}</h2>
         </div>
         <button type="button" className="ixb db-edit" aria-pressed={edit} onClick={() => setEdit(!edit)}

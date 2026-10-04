@@ -10,7 +10,7 @@ import { useCore, can, ms, openObject, fmtDateTime, scopeLabel } from "../../cor
 import type { FileDoc, FileVersion, Id, RecordItem } from "../../core";
 import { Chip, Empty, KV, LABEL, Notice, PersonName, Section, SidePanel, toneOf } from "../kit";
 import { Pill, eyebrowOf } from "../frame";
-import { Grow, List, ListButton, Ref, RecordStatus, When, fmtDay, sourceLabel, typeOf, useFocus } from "./common";
+import { Grow, List, ListButton, Ref, RecordStatus, When, fmtDay, fileUses, sourceLabel, typeOf, useFocus } from "./common";
 import { RecordPanel } from "./RecordPanel";
 import { Highlight, RecCard, RecEmpty, RecPage, RecordsHero, matchesAll, plural, termsOf } from "./hero";
 
@@ -230,6 +230,7 @@ function Doc({ f, terms, folder, overdue, onRecord }: { f: FileDoc; terms: strin
   const hiddenLinked = f.linkedRecordIds.length - linked.length;
   const requests = q.requests({ ignoreScope: true }).filter((r) => r.fields.fileId === f.id || r.evidenceFileIds.includes(f.id));
   const tasks = q.tasks({ ignoreScope: true }).filter((t) => t.evidenceFileIds.includes(f.id));
+  const uses = fileUses(core, q, f.id);
   const reqTone = (s: string) => s === "approved" ? "ok" as const : s === "declined" ? "bad" as const : s === "changes_requested" ? "warn" as const : s === "submitted" ? "accent" as const : "neutral" as const;
 
   const facts: [string, ReactNode][] = [
@@ -296,8 +297,8 @@ function Doc({ f, terms, folder, overdue, onRecord }: { f: FileDoc; terms: strin
       </div>
 
       <div className="rf-box">
-        <div className="rf-box-k">Used in · {requests.length + tasks.length}</div>
-        {requests.length + tasks.length === 0 ? <div className="rc-small" style={{ marginTop: 8 }}>No request, decision or task refers to this file.</div> : (
+        <div className="rf-box-k">Used in · {requests.length + tasks.length + uses.length}</div>
+        {requests.length + tasks.length + uses.length === 0 ? <div className="rc-small" style={{ marginTop: 8 }}>No request, decision, task, requirement or agent run refers to this file.</div> : (
           <div className="rf-list">
             {requests.map((r) => {
               const ap = r.approvalId ? q.approval(r.approvalId) : undefined;
@@ -325,6 +326,11 @@ function Doc({ f, terms, folder, overdue, onRecord }: { f: FileDoc; terms: strin
                 </button>
               );
             })}
+            {uses.map((u) => (
+              <button key={u.key} type="button" className="rf-li" onClick={u.open}>
+                <span className="rh-two" style={{ flex: 1 }}><span>{u.label}</span><span>{u.sub}</span></span>
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -351,6 +357,7 @@ export function FilePanel({ id, onClose }: { id: Id; onClose: () => void }) {
   const hiddenLinked = linked.filter((r) => !r).length;
   const requests = q.requests({ ignoreScope: true }).filter((r) => r.fields.fileId === f.id || r.evidenceFileIds.includes(f.id));
   const tasks = q.tasks({ ignoreScope: true }).filter((t) => t.evidenceFileIds.includes(f.id));
+  const uses = fileUses(core, q, f.id);
   const events = q.events({ ignoreScope: true }).filter((e) => e.objectType === "file" && e.objectId === f.id).sort((a, b) => b.at.localeCompare(a.at));
   const overdue = !!f.reviewDate && ms(f.reviewDate) < ms(ctx.now);
   const reqTone = (s: string) => s === "approved" ? "ok" as const : s === "declined" ? "bad" as const : s === "changes_requested" ? "warn" as const : s === "submitted" ? "accent" as const : "neutral" as const;
@@ -417,8 +424,8 @@ export function FilePanel({ id, onClose }: { id: Id; onClose: () => void }) {
         )}
       </Section>
 
-      <Section label={"Used in · " + (requests.length + tasks.length)}>
-        {requests.length + tasks.length === 0 ? <div className="rc-small">No request or task refers to this file.</div> : (
+      <Section label={"Used in · " + (requests.length + tasks.length + uses.length)}>
+        {requests.length + tasks.length + uses.length === 0 ? <div className="rc-small">No request, task, requirement or agent run refers to this file.</div> : (
           <List>
             {requests.map((r) => {
               const ap = r.approvalId ? q.approval(r.approvalId) : undefined;
@@ -443,6 +450,9 @@ export function FilePanel({ id, onClose }: { id: Id; onClose: () => void }) {
                 </ListButton>
               );
             })}
+            {uses.map((u) => (
+              <ListButton key={u.key} onClick={u.open}><Grow>{u.label}<div className="rc-small">{u.sub}</div></Grow></ListButton>
+            ))}
           </List>
         )}
       </Section>

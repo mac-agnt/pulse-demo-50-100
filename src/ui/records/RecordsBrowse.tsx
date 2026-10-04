@@ -1,7 +1,8 @@
-/* Records > Browse, in the original Pulse design: the Records hero with an
-   "ask in your own words" search, quick segments with counts, filter chips and
-   the directory-style card table over the permitted, in-scope records. Rows
-   open the record panel. New record, saved views and export work through ops. */
+/* Records > Browse, the default Records tab: a compact header with the
+   search, one bar of quick segments and filter chips, then the table of
+   permitted, in-scope records (dense rows, so 8 to 10 show at 1440x900).
+   Rows open the record panel. New record, saved views and export work
+   through ops. No illustrative graph sits above the list. */
 
 import { useMemo, useState } from "react";
 import { useCore, store, ops, can, scopeLabel, toCsv, relative, ms, missingFields, STALE_AFTER_HOURS, HOUR, DAY } from "../../core";
@@ -174,9 +175,9 @@ export default function RecordsBrowse(_props: { v: unknown }) {
     { id: "all", label: "All", title: "Everything that matches the search and filters" },
     { id: "review", label: "Needs review", title: "In a review status, a correction waiting for its source, or an open data issue other than a missing field" },
     { id: "missing", label: "Missing data", title: "At least one required field is empty" },
-    { id: "work", label: "Linked to open work", title: "An open task or an open request refers to it" },
-    { id: "recent", label: "Changed recently (7 days)", title: "Updated in the last 7 days" },
-    { id: "stale", label: "From a stale source", title: "A source last synced more than " + STALE_AFTER_HOURS + " hours ago" }
+    { id: "work", label: "Open work", title: "An open task or an open request refers to it" },
+    { id: "recent", label: "Changed in 7 days", title: "Updated in the last 7 days" },
+    { id: "stale", label: "Stale source", title: "A source last synced more than " + STALE_AFTER_HOURS + " hours ago" }
   ];
 
   const firstStatus = base[0] ? statusOf(core, base[0]).label.toLowerCase() : "";
@@ -229,7 +230,7 @@ export default function RecordsBrowse(_props: { v: unknown }) {
 
   return (
     <RecPage>
-      <RecordsHero
+      <RecordsHero compact
         eyebrow={eyebrowOf("Records", "Browse", plural(base.length, (type?.label || T.record), pluralLabel), idSet ? "from " + idsFilter!.label : scopeLabel(core, ctx.scope))}
         title={pluralLabel}
         blurb={"Every " + (type?.label || T.record).toLowerCase() + " you are allowed to see. Ask in your own words: it matches on reference, title, owner, " + T.team.toLowerCase() + " and fields."}
@@ -249,15 +250,15 @@ export default function RecordsBrowse(_props: { v: unknown }) {
         </div>
       )}
 
-      <div className="rh-quick" role="group" aria-label="Quick segments">
-        {quickDefs.map((d) => (
-          <button key={d.id} type="button" className="rh-qchip" aria-pressed={quick === d.id} title={d.title} onClick={() => { setQuick(d.id); setLimit(PAGE); }}>
-            {d.label}<span className="rh-qcount">{filtered.filter(isQuick[d.id]).length}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="rh-toolbar">
+      <div className="rh-bar">
+        <span role="group" aria-label="Quick segments" style={{ display: "contents" }}>
+          {quickDefs.map((d) => (
+            <button key={d.id} type="button" className="rh-qchip" aria-pressed={quick === d.id} title={d.title} onClick={() => { setQuick(d.id); setLimit(PAGE); }}>
+              {d.label}<span className="rh-qcount">{filtered.filter(isQuick[d.id]).length}</span>
+            </button>
+          ))}
+        </span>
+        <span className="wk-vsep" aria-hidden="true" style={{ width: 1, height: 22, background: "var(--border)" }} />
         {views.length > 0 && (
           <FilterChip label="Saved view" value={viewId} onChange={applyView}
             options={[{ value: "", label: "No saved view" }, ...views.map((v) => ({ value: v.id, label: v.name + (v.ownerId !== viewer.person.id ? " (" + q.name(v.ownerId) + ")" : v.shared ? " (shared)" : "") }))]} />
@@ -278,10 +279,10 @@ export default function RecordsBrowse(_props: { v: unknown }) {
       </div>
       {exportReason && <div className="rc-small" style={{ margin: "-6px 0 12px" }}>Export is off: {exportReason}</div>}
 
-      <RecCard
+      <RecCard compact
         title={idsFilter ? T.records + " from " + idsFilter.label : (type ? type.plural : "All " + T.records.toLowerCase())}
         caption={terms.length ? "Filtered by " + terms.map((t) => "“" + t + "”").join(" and ") + (quick !== "all" ? ", " + quickDefs.find((d) => d.id === quick)!.label.toLowerCase() : "")
-          : quick !== "all" ? quickDefs.find((d) => d.id === quick)!.title + "." : "Open a row for its fields, links, history and sources."}
+          : quick !== "all" ? quickDefs.find((d) => d.id === quick)!.title + "." : "Open a row for its overview, related work, files, history and sources."}
         badge={rows.length + " / " + base.length}
         footer={<><span style={{ flex: 1 }}>Showing {shown.length} of {plural(rows.length, T.record.toLowerCase(), T.records.toLowerCase())}{activeView ? ". View: " + activeView.name : ""}</span>
           {sorted.length > shown.length && <button type="button" className="rh-more" onClick={() => setLimit(limit + PAGE)}>Show {Math.min(PAGE, sorted.length - shown.length)} more</button>}
@@ -290,7 +291,7 @@ export default function RecordsBrowse(_props: { v: unknown }) {
         {rows.length > 0 && (
           <div className="rh-scroll">
             <div style={{ minWidth: 1080 }} role="table" aria-label={pluralLabel}>
-              <div className="rh-th" role="row" style={{ gridTemplateColumns: COLS }}>
+              <div className="rh-th rh-th--dense" role="row" style={{ gridTemplateColumns: COLS }}>
                 {sortHead("record", T.record)}{sortHead("team", T.team)}{sortHead("status", "Status")}{sortHead("owner", "Owner")}
                 {sortHead("required", "Required fields")}{sortHead("source", "Source")}{sortHead("issues", "Issues")}
               </div>
@@ -303,12 +304,12 @@ export default function RecordsBrowse(_props: { v: unknown }) {
                 const n = facts.issues.get(r.id) || 0;
                 const unit = unitOf(r);
                 return (
-                  <button key={r.id} type="button" role="row" className="rh-tr" aria-current={openId === r.id ? "true" : undefined}
+                  <button key={r.id} type="button" role="row" className="rh-tr rh-tr--dense" aria-current={openId === r.id ? "true" : undefined}
                     style={{ gridTemplateColumns: COLS, animationDelay: Math.min(i, 12) * 18 + "ms" }} onClick={() => setOpenId(r.id)}>
                     <span className="rh-td" role="cell"><span className="rh-two"><span>{r.title}</span><span className="pk-mono">{r.ref}{!type ? ", " + (typeOfRec(r)?.label || r.typeId) : ""}</span></span></span>
                     <span className="rh-td" role="cell"><span className="rh-two"><span>{teamText(r)}</span><span>{unit || "No " + T.unit.toLowerCase()}</span></span></span>
                     <span className="rh-td" role="cell"><Pill tone={st.tone}>{st.label}</Pill></span>
-                    <span className="rh-td" role="cell"><Initials name={q.name(r.ownerId)} initials={q.initials(r.ownerId)} size={26} /><span className="rh-ell" style={{ color: "var(--body)" }}>{q.name(r.ownerId)}</span></span>
+                    <span className="rh-td" role="cell"><Initials name={q.name(r.ownerId)} initials={q.initials(r.ownerId)} size={22} /><span className="rh-ell" style={{ color: "var(--body)" }}>{q.name(r.ownerId)}</span></span>
                     <span className="rh-td" role="cell">
                       <span className="rh-two">
                         {req.length === 0 ? <span style={{ color: "var(--dim)" }}>None required</span>

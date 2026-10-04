@@ -2,10 +2,15 @@ import { Fragment } from "react";
 import { arr, css, cx, txt } from "../../runtime/template";
 import HomeThread from "./HomeThread";
 import HomeWidgetRail from "./HomeWidgetRail";
+import HomeToday from "../../ui/home/Today";
 
 type Props = { v: any };
 
+/* Home has two modes, switched from the top-bar tabs (v.homeMode):
+   Chat is the Base Pulse chat-led home, kept exactly; Today uses the main
+   width for briefing, decisions, priorities, agenda and team exceptions. */
 export default function Home({ v }: Props) {
+  if (v.homeMode === "today") return <HomeToday v={v} />;
   return (
     <>
       <div className="pk-home" style={{"position":"relative","display":"flex","gap":"20px","height":"100%","padding":"0 22px 22px"}}>

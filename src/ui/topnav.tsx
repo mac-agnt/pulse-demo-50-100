@@ -1,12 +1,15 @@
-/* The top bar for a multi-unit organisation: where you are (scope), which
-   module, and which page inside it. Each is a switcher, so the whole product is
-   reachable from the bar without opening the rail. Pages can be shown as tabs
-   instead (the preference lives in PulseLogic and is remembered per browser). */
+/* The top bar: the module switcher (module title), a compact scope control
+   next to it, then the module's pages. On desktop the pages are visible tabs
+   by default; the page menu is for narrow screens or for people who choose
+   "Pages as menu" (remembered per browser in PulseLogic). Global search stays
+   its own control. The module switcher lists only enabled, permitted modules,
+   grouped, and is where business modules are pinned to the side rail. */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { navigate, scopeKey, scopeOptions, store, useCore, type Page, type ScopeSel } from "../core";
+import { GROUP_LABEL, navigate, projectHealth, projectsFor, pageLabel, scopeKey, scopeOptions, store, useCore, visiblePages, type NavGroup, type PageId, type ScopeSel } from "../core";
 import { attention, workCounts } from "./selectors";
+import { pinnedPages, setPinned, usePinsVersion } from "./pins";
 import { personRows } from "../core/people";
 import { query as queryFor } from "../core/query";
 import { ICONS } from "../logic/data";
@@ -52,7 +55,7 @@ const Check = () => (
 
 /* ── Scope ─────────────────────────────────────────────────────────────── */
 
-export function ScopeSwitch() {
+export function ScopeSwitch({ compact }: { compact?: boolean } = {}) {
   const { core, session, q } = useCore();
   const p = usePopover();
   const [group, setGroup] = useState("All");
@@ -79,9 +82,9 @@ export function ScopeSwitch() {
   const teams = opts.filter((o) => o.sel.kind === "team");
   return (
     <>
-      <button ref={p.btn} type="button" className="tn-btn" aria-haspopup="dialog" aria-expanded={p.open} onClick={() => p.setOpen(!p.open)}
-        title={"Scope: " + cur.label} aria-label={"Switch " + T.unit.toLowerCase() + " or team. Current: " + cur.label}>
-        <span className="tn-ico" style={{ color: "var(--accent)" }}><Glyph d={ICONS.orgs} size={15} /></span>
+      <button ref={p.btn} type="button" className={"tn-btn" + (compact ? " tn-btn--scope" : "")} aria-haspopup="dialog" aria-expanded={p.open} onClick={() => p.setOpen(!p.open)}
+        title={"Scope: " + cur.label + ". Applies to every page"} aria-label={"Scope: " + cur.label + ". Switch " + T.unit.toLowerCase() + " or team"}>
+        <span className="tn-ico" style={{ color: compact ? "var(--dim)" : "var(--accent)" }}><Glyph d={ICONS.orgs} size={compact ? 13 : 15} /></span>
         <span className="tn-lbl">{cur.label}</span>
         <Chevron />
       </button>
@@ -145,52 +148,106 @@ export function ScopeSwitch() {
 
 /* ── Modules ───────────────────────────────────────────────────────────── */
 
-interface ModuleItem { page: Page; label: string; icon: string; count?: number; divider?: boolean }
+interface ModuleItem { page: PageId; label: string; icon: string; group: NavGroup; count?: number; countTitle?: string }
 
-function moduleItems(): ModuleItem[] {
+/** Small counts that help someone act, computed through the query layer in the current scope. */
+function countFor(page: PageId): { n?: number; title?: string } {
   const { core, q } = store.get();
-  const wc = workCounts(q);
-  const people = personRows(q);
-  const peopleAttention = people.filter((r) => r.certIssue === "lapsed" || (r.probationDueDays !== null && r.probationDueDays <= 30) || r.docsOutstanding > 0).length;
-  const caps = core.config.capabilities;
-  return [
-    { page: "Home", label: "Home", icon: ICONS.helios },
-    { page: "Agents", label: "Agents", icon: ICONS.navAgents, count: caps.agents ? core.config.agents.filter((a) => a.enabled).length : undefined, divider: true },
-    { page: "Dashboard", label: "Dashboard", icon: ICONS.navDash },
-    { page: "Work", label: "Work", icon: ICONS.navWork, count: wc.tasks + wc.approvals + peopleAttention || undefined },
-    { page: "Records", label: "Records", icon: ICONS.navRecords, count: q.issues().filter((i) => i.state === "open").length || undefined },
-    { page: "Activity", label: "Activity", icon: ICONS.pulseLine, count: attention(q).length || undefined, divider: true },
-    { page: "Settings", label: "Settings", icon: ICONS.navAdmin }
-  ];
+  const d = core.data;
+  const nz = (n: number) => (n > 0 ? n : undefined);
+  switch (page) {
+    case "Work": { const wc = workCounts(q); return { n: nz(wc.mine + wc.approvals), title: "Your open tasks and decisions waiting on you" }; }
+    case "Records": return { n: nz(q.issues().filter((i) => i.state === "open").length), title: "Open data issues" };
+    case "Activity": return { n: nz(attention(q).length), title: "Items that need attention" };
+    case "Agents": return { n: nz(d.agentRuns.filter((r) => r.state === "failed" || r.state === "waiting_approval").length), title: "Agent runs failed or waiting for approval" };
+    case "People": {
+      const rows = personRows(q);
+      return { n: nz(rows.filter((r) => r.certIssue === "lapsed" || (r.probationDueDays !== null && r.probationDueDays <= 30) || r.docsOutstanding > 0).length), title: "People with an action due" };
+    }
+    case "Projects": return { n: nz(projectsFor(q).filter((p) => p.status === "active" && projectHealth(core, p, q.ctx.now).health !== "on_track").length), title: "Active projects at risk or off track" };
+    case "Purchasing": return { n: nz(d.invoices.filter((i) => i.status === "exception").length), title: "Supplier invoices with a matching exception" };
+    case "Standards": return { n: nz(d.obligations.filter((o) => o.state === "missing" || o.state === "rejected" || o.state === "expired").length), title: "Requirements missing, rejected or expired" };
+    default: return {};
+  }
 }
 
-export function ModuleSwitch({ current }: { current: Page }) {
-  useCore();
+function moduleItems(): ModuleItem[] {
+  const { core, session } = store.get();
+  return visiblePages(core, session.viewerId).map((p) => {
+    const c = countFor(p.id);
+    return { page: p.id, label: pageLabel(core.config, p.id), icon: ICONS[p.icon as keyof typeof ICONS] || ICONS.files, group: p.group, count: c.n, countTitle: c.title };
+  });
+}
+
+const PinGlyph = ({ on }: { on: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5Z M12 14v6" />
+  </svg>
+);
+
+export function ModuleSwitch({ current, pagesAsTabs, toggleTabs, canTabs }: { current: PageId; pagesAsTabs?: boolean; toggleTabs?: () => void; canTabs?: boolean }) {
+  const { core, session } = useCore();
+  usePinsVersion();
   const p = usePopover();
   const items = moduleItems();
-  const cur = items.find((i) => i.page === current) || items[0];
+  const cur = items.find((i) => i.page === current) || { page: current, label: pageLabel(core.config, current), icon: ICONS.navAdmin, group: "shared" as NavGroup };
+  const pinned = pinnedPages(core, session.viewerId);
+  const groups: NavGroup[] = ["daily", "business", "shared"];
+  const go = (page: PageId) => { p.setOpen(false); navigate({ page }); };
+  const hasBusiness = items.some((i) => i.group === "business");
   return (
     <>
-      <button ref={p.btn} type="button" className="tn-btn" aria-haspopup="dialog" aria-expanded={p.open} onClick={() => p.setOpen(!p.open)} aria-label={"Switch module. Current: " + cur.label}>
+      <button ref={p.btn} type="button" className="tn-btn tn-btn--module" aria-haspopup="dialog" aria-expanded={p.open} onClick={() => p.setOpen(!p.open)} aria-label={"Switch module. Current: " + cur.label}>
         <span className="tn-ico" style={{ color: "var(--accent)" }}><Glyph d={cur.icon} size={15} /></span>
         <span className="tn-lbl">{cur.label}</span>
         <Chevron />
       </button>
-      <Pop p={p} width={330} label="Go to">
-        <div className="tn-eyebrow">GO TO</div>
-        <div className="tn-list">
-          {items.map((i) => (
-            <div key={i.page}>
-              <button type="button" className="tn-mod" aria-current={i.page === current} onClick={() => { p.setOpen(false); navigate({ page: i.page }); }}>
-                <span className="tn-ico"><Glyph d={i.icon} /></span>
-                <span className="tn-t" style={{ flex: 1 }}>{i.label}</span>
-                {i.count !== undefined && <span className="tn-count">{i.count}</span>}
-                {i.page === current && <Check />}
-              </button>
-              {i.divider && <div className="tn-div" />}
+      <Pop p={p} width={340} label="Modules">
+        {groups.map((g) => {
+          const list = items.filter((i) => i.group === g && i.page !== "Settings");
+          if (!list.length) return null;
+          return (
+            <div key={g} className="tn-group">
+              <div className="tn-eyebrow">{GROUP_LABEL[g]}</div>
+              <div className="tn-list">
+                {list.map((i) => {
+                  const isPinned = pinned.includes(i.page);
+                  return (
+                    <div key={i.page} className="tn-modrow">
+                      <button type="button" className="tn-mod" aria-current={i.page === current} onClick={() => go(i.page)}>
+                        <span className="tn-ico"><Glyph d={i.icon} /></span>
+                        <span className="tn-t" style={{ flex: 1 }}>{i.label}</span>
+                        {i.count !== undefined && <span className="tn-count" title={i.countTitle}>{i.count}</span>}
+                        {i.page === current && <Check />}
+                      </button>
+                      {g === "business" && (
+                        <button type="button" className="tn-pin" aria-pressed={isPinned}
+                          title={isPinned ? "Unpin from the side rail" : "Pin to the side rail"}
+                          aria-label={(isPinned ? "Unpin " : "Pin ") + i.label + (isPinned ? " from" : " to") + " the side rail"}
+                          onClick={() => setPinned(core, session.viewerId, i.page, !isPinned)}>
+                          <PinGlyph on={isPinned} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {g === "business" && <div className="tn-note">Pinned modules sit in the side rail. The rest stay here.</div>}
             </div>
-          ))}
-        </div>
+          );
+        })}
+        {!hasBusiness && <div className="tn-note">No business modules are switched on. An administrator can enable them in Settings, Modules and labels.</div>}
+        <div className="tn-div" />
+        <button type="button" className="tn-mod" aria-current={current === "Settings"} onClick={() => go("Settings")}>
+          <span className="tn-ico"><Glyph d={ICONS.navAdmin} /></span>
+          <span className="tn-t" style={{ flex: 1 }}>Settings</span>
+          {current === "Settings" && <Check />}
+        </button>
+        {canTabs && toggleTabs && (
+          <button type="button" className="tn-foot" onClick={() => { p.setOpen(false); toggleTabs(); }}>
+            <Glyph d={ICONS.files} size={14} /> {pagesAsTabs ? "Show pages as a menu" : "Show pages as tabs"}
+          </button>
+        )}
       </Pop>
     </>
   );
@@ -198,7 +255,8 @@ export function ModuleSwitch({ current }: { current: Page }) {
 
 /* ── Pages ─────────────────────────────────────────────────────────────── */
 
-export function PageSwitch({ module, tabs, asTabs, toggleTabs }: { module: string; tabs: CtxTab[]; asTabs: boolean; toggleTabs: () => void }) {
+/** Page menu: narrow screens, or when someone chose "Pages as menu" on desktop. */
+export function PageSwitch({ module, tabs, toggleTabs, canTabs }: { module: string; tabs: CtxTab[]; asTabs?: boolean; toggleTabs?: () => void; canTabs?: boolean }) {
   const p = usePopover();
   if (!tabs.length) return null;
   const cur = tabs.find((t) => t.active) || tabs[0];
@@ -211,7 +269,7 @@ export function PageSwitch({ module, tabs, asTabs, toggleTabs }: { module: strin
         <Chevron />
       </button>
       <Pop p={p} width={320} label={module + " pages"}>
-        <div className="tn-eyebrow">{module.toUpperCase()} · {tabs.length} PAGES</div>
+        <div className="tn-eyebrow">{module.toUpperCase()} PAGES</div>
         <div className="tn-list">
           {tabs.map((t) => (
             <button key={t.label} type="button" className="tn-mod" aria-current={t.active} onClick={() => { p.setOpen(false); t.go(); }}>
@@ -221,10 +279,14 @@ export function PageSwitch({ module, tabs, asTabs, toggleTabs }: { module: strin
             </button>
           ))}
         </div>
-        <div className="tn-div" />
-        <button type="button" className="tn-foot" onClick={() => { p.setOpen(false); toggleTabs(); }}>
-          <Glyph d={ICONS.files} size={14} /> {asTabs ? "Show pages as a menu instead" : "Show pages as tabs instead"}
-        </button>
+        {canTabs && toggleTabs && (
+          <>
+            <div className="tn-div" />
+            <button type="button" className="tn-foot" onClick={() => { p.setOpen(false); toggleTabs(); }}>
+              <Glyph d={ICONS.files} size={14} /> Show pages as tabs
+            </button>
+          </>
+        )}
       </Pop>
     </>
   );

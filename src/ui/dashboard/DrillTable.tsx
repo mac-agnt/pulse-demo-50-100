@@ -5,7 +5,9 @@ import { useCore, openObject, navigate, personRows, fmtDate, fmtHours, hoursBetw
 import { Chip, DataTable, Empty, LABEL, toneOf, PersonName, type Column } from "../kit";
 import { dashStore } from "./state";
 
-type Row = { id: string; kind: "task" | "approval" | "record" | "issue" | "request" | "person"; t?: Task; a?: Approval; r?: RecordItem; i?: DataIssue; q?: RequestItem; p?: PersonRow };
+type Row = { id: string; kind: "task" | "approval" | "record" | "issue" | "request" | "person" | "module"; t?: Task; a?: Approval; r?: RecordItem; i?: DataIssue; q?: RequestItem; p?: PersonRow;
+  /** Module entities (projects, invoices, requirements, agent runs): a plain reference, title and state. */
+  m?: { ref: string; title: string; state: string; owner?: string | null; open: () => void } };
 
 const STAGE: Record<string, string> = { onboarding: "Onboarding", probation: "Probation", active: "Active", leaving: "Leaving", left: "Left" };
 const CERT: Record<string, string> = { missing: "Certificate missing", lapsed: "Certificate lapsed", due: "Renewal due" };
@@ -23,6 +25,25 @@ export function DrillTable({ result, pageSize = 8 }: { result: MetricResult; pag
       case "issue": { const i = issues.find((x) => x.id === id); return i ? { id, kind: "issue", i } : null; }
       case "request": { const rq = q.request(id); return rq ? { id, kind: "request", q: rq } : null; }
       case "person": { const p = people.find((x) => x.person.id === id); return p ? { id, kind: "person", p } : null; }
+      case "project": {
+        const p = core.data.projects.find((x) => x.id === id);
+        return p && q.canSee({ ownerIds: [p.ownerId], teamId: p.teamId, unitId: p.unitId, visibility: p.visibility })
+          ? { id, kind: "module", m: { ref: p.ref, title: p.title, state: p.status.replace("_", " "), owner: p.ownerId, open: () => openObject("project", id) } } : null;
+      }
+      case "invoice": {
+        const x = core.data.invoices.find((v) => v.id === id);
+        return x ? { id, kind: "module", m: { ref: x.ref, title: (core.data.suppliers.find((s) => s.id === x.supplierId)?.name || "Supplier") + ", " + x.amount.toLocaleString("en-IE") + " " + x.currency, state: x.status.replace("_", " "), open: () => openObject("invoice", id) } } : null;
+      }
+      case "requirement": {
+        const o = core.data.obligations.find((v) => v.id === id);
+        const req = o ? core.config.standards.requirements.find((r) => r.id === o.requirementId) : core.config.standards.requirements.find((r) => r.id === id);
+        if (o) return { id, kind: "module", m: { ref: o.id, title: (req?.label || o.requirementId) + " (" + o.subject.kind + ")", state: o.state.replace("_", " "), open: () => openObject("obligation", id) } };
+        return req ? { id, kind: "module", m: { ref: req.id, title: req.label, state: "requirement", open: () => openObject("obligation", id) } } : null;
+      }
+      case "agentRun": {
+        const r = core.data.agentRuns.find((v) => v.id === id);
+        return r ? { id, kind: "module", m: { ref: r.ref, title: r.goal, state: r.state.replace("_", " "), owner: r.agentId, open: () => openObject("agentRun", id) } } : null;
+      }
       default: return null;
     }
   }).filter((x): x is Row => !!x);
@@ -103,6 +124,16 @@ export function DrillTable({ result, pageSize = 8 }: { result: MetricResult; pag
       break;
   }
 
+  if (columns.length === 0) {
+    columns = [
+      { key: "ref", label: "Ref", priority: 2, value: (r) => r.m?.ref || "", render: (r) => <span className="pk-mono" style={{ fontSize: 12 }}>{r.m?.ref}</span> },
+      { key: "title", label: "Item", strong: true, priority: 1, value: (r) => r.m?.title || "", width: "46%" },
+      { key: "state", label: "State", priority: 1, value: (r) => r.m?.state || "" },
+      { key: "owner", label: "Owner", priority: 3, value: (r) => (r.m?.owner ? q.name(r.m.owner) : "") }
+    ];
+    search = (r) => (r.m?.ref || "") + " " + (r.m?.title || "");
+  }
+
   const hidden = result.ids.length - rows.length;
   return (
     <DataTable<Row>
@@ -115,8 +146,7 @@ export function DrillTable({ result, pageSize = 8 }: { result: MetricResult; pag
       pageSize={pageSize}
       onOpen={(r) => {
         dashStore.set({ metricId: null });
-        // People live in Work, People; there is no per-person focus to hand over.
-        if (r.kind === "person") navigate({ page: "Work", section: "people" });
+        if (r.kind === "module") r.m?.open();
         else openObject(r.kind, r.id);
       }}
       empty={<Empty title="Nothing counted" body={"This figure is computed from no objects in " + (ctx.scope.kind === "personal" ? "your work" : "this scope") + "."} />}

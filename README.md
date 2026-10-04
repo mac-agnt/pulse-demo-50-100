@@ -110,3 +110,51 @@ Labels, modules, records, views and workflows are set in the client's configurat
 - The Ontology graph is an illustrative procedural layout (labelled so), kept because `CLAUDE.md` locks it. Browse is the way to find a record.
 - New requests do not create a workflow run. Runs exist for the seeded cases and for scheduled automations.
 - **Do not run `npm run import-design` on this copy.** It overwrites `src/views` and `src/logic` and would undo this work.
+
+## V2 (October 2026): modules, operations and the agent organisation
+
+Navigation and modules come from `src/core/modules.ts`. Projects and People are on in the shared build;
+Finance, Purchasing and Standards are optional and switched on only in the sample. Turning one off
+(Settings > Experience > Modules & labels) removes its navigation, tabs, dashboard views, shortcuts and
+agent tools, explains the impact first, and keeps its data. Every page and tab has a direct link (`#/Page/tab`).
+
+| Area | Where | What it does |
+| --- | --- | --- |
+| Home | `src/ui/home/Today.tsx` | Chat mode as before; Today mode: briefing linked to sources, decisions mine / others, priorities, agenda, exceptions |
+| Dashboard | `src/ui/dashboard/` | One KPI strip, trend, comparison table (rows open unit profiles), exceptions, Reports |
+| Work | `src/ui/work/` | My work, Team work (same tasks), Requests, Approvals, Workflows, Calendar (`src/core/calendar.ts`) |
+| Projects | `src/core/projects.ts`, `src/ui/projects/` | Portfolio, timeline, templates, project detail, gates, milestone impact preview |
+| Unit profiles | `src/ui/units/UnitProfile.tsx` | Unit, team or location: performance, work, projects, people, files, activity |
+| People | `src/ui/peoplemod/`, `src/ui/people/` | Directory, teams, weekly allocation (unestimated work kept separate), onboarding, documents and training |
+| Finance | `src/core/finance.ts`, `src/ui/finance/` | Budgets (approved, committed, invoiced, paid side by side), receivables, payables, transactions, cash outlook only with an opening balance |
+| Purchasing | `src/core/purchasing.ts`, `src/ui/purchasing/` | Purchase requests (canonical requests), orders, suppliers, receipts, invoice matching and review |
+| Standards | `src/core/standards.ts`, `src/ui/standards/` | Requirements, readiness matrix, evidence review, checks, policy acknowledgements |
+| Agents | `src/core/orchestration.ts`, `src/ui/agents/` | Organisation chart (default), list view, runs, templates, guided add-agent flow |
+| Activity | `src/ui/activity/`, `src/core/updates.ts` | Overview streams grouped into stories, company updates (draft, then publish), needs attention, history |
+
+**Agents.** A saved definition (`config.agents`) has an accountable owner, a coordinator (chart parent only:
+it grants no data or tool authority), scope, tools, limits and an optional spawn policy. A run
+(`data.agentRuns`) records each step. Temporary workers live inside a run and are never saved agents unless
+someone explicitly saves one as a draft. Restricted tools raise a canonical request in Work; the decision and
+the execution are separate steps and the effect is keyed so it never applies twice. Runs execute in the
+local sample engine (deterministic, labelled Simulated, usage Unknown). To run agents for real, implement
+the `OrchestrationAdapter` interface in `src/core/orchestration.ts` against a server-side runtime; provider
+keys stay server-side.
+
+**Operational locally (sample engine and demo store):** module navigation and configuration, project
+templates, gates and milestone moves, budgets and invoice matching, evidence review and gates, checks and
+acknowledgements, weekly allocation, calendar and appointments, company update drafting and publishing,
+agent definitions, coordinator delegation, temporary workers within limits, approval waits, stop, retry
+without repeated effects.
+
+**Simulated or not connected:** sign-in (role preview only), backend security and tenant isolation (all
+checks run in the browser), any AI model or agent runtime, the accounting feed (sample, read-only), order
+sending and payments (always refused honestly), email, scheduling (schedules run from a button, report
+schedules are labelled simulated).
+
+**Client configuration:** module labels and tab labels, project label/types/phases/templates/progress basis,
+record types and fields, metrics (modules register calculations with `registerMetric`), dashboards (with
+an optional owning module), approval rules and forms (modules plug in with `registerEffect` and
+`registerDecisionHook`), purchasing tolerance and receipt rules, standards requirements and checks, agent
+tools, templates and orchestration limits, role defaults (Home Chat or Today). Sample rows live in
+`src/core/fixtures/sample-*.ts` and can be removed with the rest of the fixture layer.

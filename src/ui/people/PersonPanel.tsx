@@ -27,13 +27,7 @@ export function PersonPanel({ personId, onClose }: { personId: Id; onClose: () =
   const [pending, setPending] = useState<Pending>(null);
   const r = personRows(q, { ignoreScope: true }).find((x) => x.person.id === personId);
 
-  if (!r) {
-    return (
-      <SidePanel open onClose={onClose} title="Not available" eyebrow="PERSON">
-        <p style={{ fontSize: 13, color: "var(--dim)" }}>This employment record is not visible to you, or it no longer exists.</p>
-      </SidePanel>
-    );
-  }
+  if (!r) return <DirectoryPanel personId={personId} onClose={onClose} />;
 
   const e = r.e;
   const may = canManage(q, e);
@@ -99,7 +93,8 @@ export function PersonPanel({ personId, onClose }: { personId: Id; onClose: () =
         ]} />
       </Section>
 
-      <Section label="Employment">
+      <Section label="Employment (restricted)">
+        <div className="pp-li-s" style={{ marginBottom: 8 }}>Visible to {isSelf ? "you, " : r.person.name.split(" ")[0] + ", "}their manager, managers of their team or unit, and administrators. Not part of the directory.</div>
         <KV items={[
           ["Stage", STAGE_LABEL[e.stage]],
           ["Contract", CONTRACT_LABEL[e.contract]],
@@ -224,6 +219,52 @@ export function PersonPanel({ personId, onClose }: { personId: Id; onClose: () =
 
       <Section label="History">
         <History ids={[personId]} empty="No changes recorded for this person yet." />
+      </Section>
+    </SidePanel>
+  );
+}
+
+/** Directory information only: what any member of staff may see about a colleague. */
+function DirectoryPanel({ personId, onClose }: { personId: Id; onClose: () => void }) {
+  const { core, q, ctx } = useCore();
+  const tz = core.config.timezone;
+  const p = core.data.people.find((x) => x.id === personId && x.kind === "staff");
+  if (!p || q.viewer.person.kind !== "staff") {
+    return (
+      <SidePanel open onClose={onClose} title="Not available" eyebrow="PERSON">
+        <p style={{ fontSize: 13, color: "var(--dim)" }}>This person is not in the staff directory, or no longer exists.</p>
+      </SidePanel>
+    );
+  }
+  const e = core.data.employment.find((x) => x.personId === personId && x.stage !== "left");
+  const teams = core.data.memberships.filter((m) => m.personId === personId).map((m) => q.teamLabel(m.teamId));
+  const away = core.data.leave.find((l) => l.personId === personId && l.status === "approved" && ms(l.from) <= ms(ctx.now) && ms(l.to) >= ms(ctx.now));
+  const tasks = q.tasks({ ignoreScope: true }).filter((t) => t.assigneeId === personId && q.isOpenTask(t)).sort((a, b) => (a.dueAt || "9").localeCompare(b.dueAt || "9"));
+  return (
+    <SidePanel open onClose={onClose} width={560} eyebrow={teams.join(" · ").toUpperCase() || "PERSON"}
+      chips={away ? <Pill tone="warn">Away to {fmtDate(away.to, tz)}</Pill> : <Pill tone="ok">Available today</Pill>}
+      title={<span>{p.name}<span style={{ fontSize: 13, color: "var(--dim)", marginLeft: 10, fontWeight: 400 }}>{p.title}</span></span>}>
+      <Section label="Directory">
+        <KV items={[
+          ["Role", p.title],
+          ["Email", p.email],
+          ["Teams", teams.join(", ") || "None"],
+          ["Manager", e?.managerId ? q.name(e.managerId) : "None recorded"],
+          ["Today", away ? "Away until " + fmtDate(away.to, tz) : "Available"]
+        ]} />
+        <div className="pp-li-s" style={{ marginTop: 8 }}>Contract, hours, probation, certificates and documents are employment details. Only this person, their manager and administrators see them.</div>
+      </Section>
+      <Section label={"Open work you can see · " + tasks.length}>
+        {!tasks.length ? <p className="pp-li-s">No open tasks you can see.</p> : (
+          <div className="pp-plist">
+            {tasks.slice(0, 12).map((t) => (
+              <button key={t.id} type="button" className="pp-pi pp-link" style={{ width: "100%" }} onClick={() => openObject("task", t.id)}>
+                <div className="pp-li-main"><div className="pp-li-t">{t.title}</div><div className="pp-li-s">{t.dueAt ? "Due " + fmtDate(t.dueAt, tz) : "No due date"}</div></div>
+                {q.isOverdue(t) && <Pill tone="bad">Overdue</Pill>}
+              </button>
+            ))}
+          </div>
+        )}
       </Section>
     </SidePanel>
   );

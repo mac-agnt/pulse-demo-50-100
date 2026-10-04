@@ -113,3 +113,47 @@ export function FocusTimerCard({ fallbackTaskId }: { fallbackTaskId?: string }) 
     </section>
   );
 }
+
+/** The compact timer for My work: one line, same state as the card. Personal only. */
+export function FocusTimerMini({ fallbackTaskId }: { fallbackTaskId?: string }) {
+  const s = useTimer();
+  const { q } = useCore();
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  const left = remaining(s);
+  useEffect(() => {
+    if (!s.running) return;
+    const h = setInterval(() => {
+      if (remaining(st) <= 0) set({ running: false, left: 0, endsAt: null });
+      else tick();
+    }, 1000);
+    return () => clearInterval(h);
+  }, [s.running]);
+  const total = s.preset * 60;
+  const task = s.taskId ? q.task(s.taskId) : undefined;
+  const mm = String(Math.floor(left / 60)).padStart(2, "0") + ":" + String(left % 60).padStart(2, "0");
+  const toggle = () => {
+    if (s.running) { set({ running: false, left: remaining(st), endsAt: null }); return; }
+    const taskId = s.taskId || fallbackTaskId || null;
+    const from = left === 0 ? total : left;
+    set({ taskId, running: true, left: from, endsAt: Date.now() + from * 1000, error: null });
+  };
+  const cycle = () => { const m = s.preset === 15 ? 25 : s.preset === 25 ? 50 : 15; set({ preset: m, left: m * 60, endsAt: s.running ? Date.now() + m * 60 * 1000 : null, error: null }); };
+  const reset = () => set({ taskId: null, running: false, endsAt: null, left: s.preset * 60, error: null });
+  const complete = () => {
+    if (!s.taskId) return;
+    const r = store.run(ops.setTaskStatus, s.taskId, "done");
+    if (r.ok) set({ taskId: null, running: false, endsAt: null, left: s.preset * 60, error: null });
+    else set({ error: r.error });
+  };
+  const label = task ? task.title : s.running ? "Focus session" : "Focus timer, personal only";
+  return (
+    <div className="wk-timer-mini" role="group" aria-label="Focus timer" title={s.error || "Personal only. Nothing is recorded or shared."}>
+      <span className="wk-timer-mini-t" aria-live="off">{mm}</span>
+      <span className="wk-timer-mini-l">{s.error ? s.error : label}</span>
+      <button type="button" className="wk-preset" onClick={cycle} title="Change the length" aria-label={"Length " + s.preset + " minutes. Change"}>{s.preset}m</button>
+      <button type="button" className="wk-icon-btn" onClick={toggle} aria-label={s.running ? "Pause timer" : "Start timer"} title={s.running ? "Pause" : "Start"}><Ico d={s.running ? WI.pause : WI.play} size={13} sw={1.9} /></button>
+      <button type="button" className="wk-icon-btn" onClick={reset} aria-label="Reset timer" title="Reset"><Ico d={WI.reset} size={13} sw={1.8} /></button>
+      <button type="button" className="wk-icon-btn wk-icon-btn--ok" onClick={complete} disabled={!task} aria-label="Mark the timed task done" title={task ? "Mark the timed task done" : "Start a task first"}><Ico d={WI.check} size={13} sw={2} /></button>
+    </div>
+  );
+}

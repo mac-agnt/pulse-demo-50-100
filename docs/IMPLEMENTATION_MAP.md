@@ -54,3 +54,45 @@ reads from one shared core instead of hardcoded client data.
 5. Home, Dashboard, Activity, Agents, chat on the same records.
 6. Settings editors.
 7. Verification: typecheck, tests, browser journeys at 1440x900 and narrow width.
+
+---
+
+# V2 (October 2026): operations template + agent organisation chart
+
+Implements "Pulse 50-100k implementation prompt V2". Three layers stay separate:
+shared foundation (`src/core/*`, shell), configurable capability modules
+(Projects, People, Finance, Purchasing, Standards: `config.modules`), client
+configuration (`OrgConfig`: labels, enabled modules, fields, phases, rules,
+templates, metrics) plus a removable sample fixture layer (`src/core/fixtures/sample-*.ts`).
+
+## Map
+
+| Requirement | Existing component | Reuse or change | Data dependency | Acceptance check |
+| --- | --- | --- | --- | --- |
+| Page/module registry | `NAV`, `WORK_SECTIONS`, `REC_SECTIONS` in `data.js` | New `src/core/modules.ts`: pages, sections, module owner, labels, `visiblePages`, `disableImpact`; PulseLogic reads it | `config.modules`, roles | Disabled module leaves nav, tabs, palette, dashboard views; data kept |
+| Grouped rail, pins, overflow | `AppShell` rail, `topnav.tsx` ModuleSwitch | Group labels, pins, ModuleSwitch from registry | registry | Only enabled + permitted pages; Agents under Home |
+| Visible page tabs on desktop | `contextNav` + PageSwitch dropdown | Tabs default at >= 900px, dropdown on mobile; one `sectionOf/setSection` for every page | registry | Tabs visible at 1440; selector at 390 |
+| Direct links, legacy ids | none | `#/Page/section` hash, legacy section map (tasks, schedules, ontology, all, people) | none | Old links land on the new section |
+| Demo menu | `ViewerCard` block in rail | Compact Demo menu + persistent Sample indicator | session | Rail no longer dominated by demo controls |
+| Home Today | Chat centre + rail | Chat kept; Today mode uses main width (briefing, decisions mine/others, priorities, agenda, exceptions) | attention, approvals, projects, agent runs, appointments | Role default + user preference |
+| Dashboard | KPI band + repeated tiles | One KPI strip, trend, comparison table -> unit profile, exceptions, Reports | metrics engine (+ `registerMetric` for modules) | No duplicate strip; drill-down = exact ids |
+| Unit profiles | none | `src/ui/units/UnitProfile.tsx` panel | metrics, tasks, projects, people, files, events | Like-for-like only |
+| Work | Tasks / Approvals / People / Schedules | My work / Team work / Requests / Approvals / Workflows / Calendar | tasks, requests, approvals, runs, schedules, appointments | Same task ids in both views; timer only in My work |
+| People module | Work > People | Directory / Teams / Availability / Onboarding / Documents and training | employment, leave, tasks (estimates) | Unestimated work never counted as zero |
+| Projects | none | `src/core/projects.ts`, `src/ui/projects/**` | projects, milestones, risks, updates, tasks, obligations, budgets | Milestone move: dependants, health, one story |
+| Finance (optional) | none | `src/core/finance.ts`, `src/ui/finance/**` | budgets, receivables, transactions, orders, invoices | Stages never summed; one currency per figure |
+| Purchasing (optional) | none | `src/core/purchasing.ts`, `src/ui/purchasing/**` | suppliers, orders, receipts, invoices, canonical requests | Over-order invoice opens one review; approval does not pay |
+| Standards (optional) | People certificates | `src/core/standards.ts`, `src/ui/standards/**` | requirements, obligations, checks, policy acks, files | Received is not accepted; acceptance releases the gate |
+| Shared approval hooks | `executeRequest` switch | `registerEffect`, `registerDecisionHook` in `ops.ts` | requests, approvals | Module reviews use the one approval model |
+| Records | Ontology default | Browse default; record detail Overview / Related work / Files / History / Sources; Relationships (ontology) last | records, files, events | 8 to 10 rows visible at 1440x900 |
+| Comments and mentions | none | `ops.addComment`, `src/ui/collab/Comments.tsx` | comments | Mentions resolve to people |
+| Activity | Audit table | Overview streams + stories by `storyKey`, company updates (draft -> publish), Needs attention, History | events, companyUpdates | Audit event never auto-published |
+| Agents | Chat-first page | Organisation chart (default), Runs, Templates; `src/core/orchestration.ts` adapter + sample engine | `config.agents`, `agentRuns`, tools, templates, orchestration limits | Cycles rejected; delegation, spawn, approval wait, retry without repeat |
+| Settings | 5 groups | New: Agent orchestration, Project types & phases, Purchasing & finance rules, Standards & requirements, Modules & labels | config | Admin-only; disable explains impact first |
+
+## Extension point for client-specific modules
+
+1. Add a `PageDef` to `PAGES` in `src/core/modules.ts` (id, sections, module id, permission).
+2. Add its page component to `MODULE_PAGES` in `src/ui/modules/registry.tsx`.
+3. Put its records and rules in a core file; plug approvals in with `registerEffect` / `registerDecisionHook`, measures with `registerMetric`, agent tools by adding `AgentToolDef`s with `module` set.
+4. Its sample rows go in a new `src/core/fixtures/sample-<module>.ts`. Shared code never checks a client name.

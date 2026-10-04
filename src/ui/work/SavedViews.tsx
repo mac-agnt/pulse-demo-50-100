@@ -11,14 +11,14 @@ import { FilterChip } from "../frame";
 import { InlineError, useRunner, useViewer } from "./shared";
 
 export type TaskTab = "all" | "due" | "review" | "done" | "team" | "blocked";
-export interface TaskFilters { due: string; status: string; who: string; team: string; priority: string }
-export const EMPTY_FILTERS: TaskFilters = { due: "", status: "", who: "", team: "", priority: "" };
+export interface TaskFilters { due: string; status: string; who: string; team: string; priority: string; estimate: string }
+export const EMPTY_FILTERS: TaskFilters = { due: "", status: "", who: "", team: "", priority: "", estimate: "" };
 const TABS: TaskTab[] = ["all", "due", "review", "done", "team", "blocked"];
 
 /** Read a stored view, including views saved by the earlier queue layout. */
 function decode(view: SavedView, me: string): { tab: TaskTab; f: TaskFilters } {
   const s = view.state.filters || {};
-  const f: TaskFilters = { ...EMPTY_FILTERS, due: s.due || "", status: s.status || "", who: s.who || s.assignee || "", team: s.team || "", priority: s.priority || "" };
+  const f: TaskFilters = { ...EMPTY_FILTERS, due: s.due || "", status: s.status || "", who: s.who || s.assignee || "", team: s.team || "", priority: s.priority || "", estimate: s.estimate || "" };
   let tab: TaskTab = TABS.includes(s.tab as TaskTab) ? (s.tab as TaskTab) : "all";
   const legacy = s.queue || (["mine", "team", "scope", "overdue", "blocked", "done"].includes(f.status) ? f.status : "");
   if (legacy) {

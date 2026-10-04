@@ -34,7 +34,17 @@ const EFFECTS: Record<EffectKind, { label: string; explain: string; needs: strin
   "create-fulfilment-task": { label: "Create a fulfilment task for the team", needs: [],
     explain: "After the final approval, an unassigned task is created in the requester's team queue and linked to the request." },
   "notify-external": { label: "Send the message through the email connection", needs: [],
-    explain: "After the final approval, a message would be sent through the email connection. Email is not connected, so this step fails honestly and nothing is sent." }
+    explain: "After the final approval, a message would be sent through the email connection. Email is not connected, so this step fails honestly and nothing is sent." },
+  "create-purchase-order": { label: "Create the purchase order", needs: ["supplierId", "amount"],
+    explain: "After the final approval, a purchase order is created in Purchasing, linked to this request. It is not sent to the supplier unless an ordering connection exists." },
+  "approve-invoice": { label: "Approve the invoice for payment", needs: ["invoiceId"],
+    explain: "After the final approval, the invoice is marked approved for payment. Payment itself is recorded only when it arrives from the accounting source." },
+  "accept-evidence": { label: "Accept the evidence", needs: ["obligationId"],
+    explain: "After the final approval, the evidence is accepted against its requirement, which updates readiness and any gate it blocks." },
+  "agent-action": { label: "Let the agent carry out its proposed action", needs: ["agentRunId"],
+    explain: "After the final approval, the waiting agent run continues and applies the action once. A declined action is recorded and the run stops that step." },
+  "change-milestone": { label: "Move the milestone", needs: ["milestoneId", "newDate"],
+    explain: "After the final approval, the milestone moves to the new date and its known dependants are flagged or moved as configured." }
 };
 
 function formErrors(forms: RequestFormDef[], rules: ApprovalRuleDef[]): Errs {
@@ -661,14 +671,29 @@ export function NotificationsSection(_p: SectionProps) {
 /* ── Agent controls ────────────────────────────────────────────────────── */
 
 export function AgentsSection(_p: SectionProps) {
-  const { core } = useCore();
+  const { core, session } = useCore();
   const canEdit = useCanEdit();
   const T = core.config.terminology;
   const d = useDraft<AgentDef[]>(core.config.agents);
-  const [sel, setSel] = useState<string | null>(core.config.agents[0]?.id || null);
+  const focusId = session.focus?.kind === "agent" ? session.focus.id : undefined;
+  const [sel, setSel] = useState<string | null>(focusId || core.config.agents.find((a) => !a.archived)?.id || core.config.agents[0]?.id || null);
   const ai = Math.max(0, d.draft.findIndex((a) => a.id === sel));
   const ag = d.draft[ai];
   const set = (fn: (a: AgentDef) => void) => d.update((x) => fn(x[ai]));
+  const ceil = core.config.orchestration.ceiling;
+  const defaults = core.config.orchestration.defaultLimits;
+  const byId = (id?: string | null) => d.draft.find((a) => a.id === id);
+  // Coordination is a tree: an agent may not sit below itself.
+  const loops = (id: string, to: string | null | undefined) => { let cur = to || null; const seen = new Set<string>(); while (cur) { if (cur === id || seen.has(cur)) return true; seen.add(cur); cur = byId(cur)?.coordinatorId || null; } return false; };
+  const below = (id: string): string[] => d.draft.filter((a) => a.coordinatorId === id).flatMap((a) => [a.id, ...below(a.id)]);
+  const toolNote = (id: string) => {
+    const t = core.config.agentTools.find((x) => x.id === id);
+    if (!t) return "Unknown tool";
+    if (t.module && !core.config.modules[t.module]?.enabled) return "Needs the " + (core.config.modules[t.module]?.label || t.module) + " module";
+    const src = t.requiresSourceId ? core.config.sources.find((x) => x.id === t.requiresSourceId) : undefined;
+    if (t.requiresSourceId && !src?.connected) return "Needs " + (src?.label || t.requiresSourceId) + " connected";
+    return t.restricted ? "Needs approval each time" : undefined;
+  };
   const errors: Errs = {};
   d.draft.forEach((a) => {
     if (!a.name.trim()) errors[a.id + ":name"] = "Enter a name.";
@@ -676,30 +701,74 @@ export function AgentsSection(_p: SectionProps) {
     if (!a.responsibleId) errors[a.id + ":resp"] = "Choose the responsible person.";
     if (a.scope.teamIds !== "all" && !a.scope.teamIds.length) errors[a.id + ":scope"] = "Choose at least one " + T.team.toLowerCase() + ".";
     if (a.permittedActions.some((x) => !x.trim()) || a.approvalRequired.some((x) => !x.trim())) errors[a.id + ":lists"] = "Remove empty lines.";
+    if (a.coordinatorId && (loops(a.id, a.coordinatorId) || !byId(a.coordinatorId) || byId(a.coordinatorId)?.archived)) errors[a.id + ":coord"] = "That coordinator is not available or would make a loop.";
+    const l = a.limits || defaults;
+    (["maxDepth", "maxChildren", "maxConcurrentRuns", "maxMinutes"] as const).forEach((k) => {
+      const v = l[k];
+      if (typeof v !== "number" || !Number.isInteger(v) || v < (k === "maxDepth" ? 0 : 1) || v > ceil[k]) errors[a.id + ":" + k] = "Whole number from " + (k === "maxDepth" ? 0 : 1) + " to " + ceil[k] + " (the ceiling).";
+    });
+    if (a.spawn?.enabled && !a.spawn.templateIds.length) errors[a.id + ":spawn"] = "Choose at least one worker template, or turn spawning off.";
+    if (a.spawn?.enabled && (!Number.isInteger(a.spawn.maxWorkers) || a.spawn.maxWorkers < 1 || a.spawn.maxWorkers > ceil.maxChildren)) errors[a.id + ":workers"] = "From 1 to " + ceil.maxChildren + ".";
+    if (a.instructions && /(api[_ -]?key|secret|password|token)\s*[:=]|sk-[a-z0-9]{12,}/i.test(a.instructions)) errors[a.id + ":ins"] = "Instructions must not contain keys or secrets.";
   });
   const E = (k: string) => (ag ? errors[ag.id + ":" + k] : undefined);
   const add = () => {
     const id = newId("ag", d.draft.map((a) => a.id), "new");
     const like = d.draft[0];
-    d.update((x) => { x.push({ id, name: "New agent", purpose: "", responsibleId: "", scope: { teamIds: "all" }, permittedActions: ["Read records in the asker's scope"], approvalRequired: [],
+    d.update((x) => { x.push({ id, name: "New agent", purpose: "", responsibleId: "", coordinatorId: null, availability: "draft", scope: { teamIds: "all" }, permittedActions: [], approvalRequired: [],
+      tools: [], knowledge: [], limits: { ...defaults }, spawn: { enabled: false, templateIds: [], maxWorkers: 1 }, version: 1, trigger: { kind: "manual", detail: "Started by a person" },
       shape: like?.shape || "crown-pebble", tint: like?.tint || "#191c1f", enabled: false }); });
     setSel(id);
   };
-  const save = () => { if (!errCount(errors)) saveConfig((c) => { c.agents = d.draft.map((a) => ({ ...a, permittedActions: a.permittedActions.map((s) => s.trim()), approvalRequired: a.approvalRequired.map((s) => s.trim()) })); }, "Updated agent controls"); };
+  const save = () => {
+    if (errCount(errors)) return;
+    const before = new Map(core.config.agents.map((a) => [a.id, JSON.stringify(a)]));
+    saveConfig((c) => {
+      c.agents = d.draft.map((a) => {
+        const changed = before.get(a.id) !== JSON.stringify(a);
+        const tools = a.tools || [];
+        const label = (t: string) => c.agentTools.find((x) => x.id === t)?.label || t;
+        const restricted = (t: string) => !!c.agentTools.find((x) => x.id === t)?.restricted;
+        const out: AgentDef = { ...a, permittedActions: a.permittedActions.map((s) => s.trim()), approvalRequired: a.approvalRequired.map((s) => s.trim()) };
+        if (changed && before.has(a.id)) out.version = (a.version || 1) + 1;
+        // Tools drive the legacy lists so older readers stay truthful.
+        if (tools.length) { out.permittedActions = tools.filter((t) => !restricted(t)).map(label); out.approvalRequired = tools.filter(restricted).map(label); }
+        // Activation is not a setting: a draft becomes ready only through Agents, after a passed test. Turning one off pauses it.
+        out.enabled = (out.availability || (out.enabled ? "ready" : "paused")) === "ready" && !out.archived;
+        return out;
+      });
+      if (c.agents.some((a) => (a.tools || []).some((t) => c.agentTools.find((x) => x.id === t)?.restricted)) && !c.requestForms.some((f) => f.id === "form-agent-action")) {
+        return "Restricted tools need the Agent action approval route. Add it from the Agents page (saving an agent there adds it), then save again.";
+      }
+    }, "Updated agent controls");
+  };
+  const workerTpls = core.config.agentTemplates.filter((t) => t.workerOk);
+  const coordOptions = ag ? [{ value: "", label: "None, top level" }, ...d.draft.filter((x) => x.id !== ag.id && !x.archived && !below(ag.id).includes(x.id)).map((x) => ({ value: x.id, label: x.name }))] : [];
+  const lim = ag ? ag.limits || defaults : defaults;
+  const av = ag ? (ag.archived ? "Archived" : ({ draft: "Draft", ready: "Ready", paused: "Paused", connection_required: "Connection required" } as const)[ag.availability || (ag.enabled ? "ready" : "paused")]) : "";
+  const hasRuns = (id: string) => core.data.agentRuns.some((r) => r.agentId === id);
+  // Turning an agent on needs its prerequisites: an owner and every tool usable (module on, connection set up).
+  const blocker = ag ? (!ag.responsibleId ? "Choose the responsible person" : !(ag.tools || []).length && !ag.permittedActions.length ? "Give it at least one tool"
+    : (ag.tools || []).map(toolNote).find((n) => !!n && n.startsWith("Needs the") || !!n && n.endsWith("connected"))) : undefined;
 
   return (
     <>
       <div className="st-detail-b">
         {!canEdit && <ReadOnlyLine />}
-        <Notice>Agent work uses the same tasks, approvals and authority rules as people. An agent never decides an approval, and anything listed under "needs approval" goes to a person first. No AI model is connected in this demo, so agents answer with labelled sample responses.</Notice>
+        <Notice>This is the one place agent policy lives: tools, scope, limits, spawning and coordination. Agent work uses the same tasks, approvals and authority rules as people. An agent never decides an approval; restricted tools always wait for a person in Work. Activation, testing and runs happen on the Agents page.</Notice>
         {d.draft.length === 0 ? (
-          <Empty title="No agents configured" body="Add an agent with a clear purpose, a responsible person and a limited scope." action={<Button variant="primary" disabled={!canEdit} onClick={add}>Add an agent</Button>} />
+          <Empty title="No agents configured" body="Add an agent with a clear purpose, a responsible person and a limited scope, or use Add agent on the Agents page for a guided setup." action={<Button variant="primary" disabled={!canEdit} onClick={add}>Add an agent</Button>} />
         ) : (
           <>
-            <ItemPicker label="Agents" items={d.draft.map((a) => ({ id: a.id, label: a.name, note: !a.enabled ? "off" : undefined }))} value={ag.id} onChange={setSel}
+            <ItemPicker label="Agents" items={d.draft.map((a) => ({ id: a.id, label: a.name, note: a.archived ? "archived" : !a.enabled ? "off" : undefined }))} value={ag.id} onChange={setSel}
               after={<Button size="sm" disabled={!canEdit} onClick={add}>Add agent</Button>} />
-            <Lock on={!canEdit}>
-            <Toggle checked={ag.enabled} disabled={!canEdit} onChange={(v) => set((a) => { a.enabled = v; })} label={ag.enabled ? "On" : "Off: it does nothing and is hidden from chat"} />
+            <Lock on={!canEdit || !!ag.archived}>
+            <div className="st-row"><Chip tone={av === "Ready" ? "ok" : av === "Connection required" ? "warn" : "neutral"}>{av}</Chip><span className="pk-help">Version {ag.version || 1}. Saving a change creates the next version; runs in progress keep theirs.</span></div>
+            {ag.availability !== "draft" && !ag.archived && (
+              <Toggle checked={ag.availability === "ready" || (!ag.availability && ag.enabled)} disabled={!canEdit || (!(ag.availability === "ready" || ag.enabled) && !!blocker)}
+                onChange={(v) => set((a) => { a.availability = v ? "ready" : "paused"; a.enabled = v; })}
+                label={(ag.availability === "ready" || ag.enabled) ? "On: takes permitted work" : blocker ? "Cannot be turned on yet: " + blocker.toLowerCase() : "Paused: takes no new work"} />
+            )}
             <div className="st-grid">
               <Field label="Name" error={E("name")}><TextInput ariaLabel="Agent name" value={ag.name} invalid={!!E("name")} onChange={(v) => set((a) => { a.name = v; })} /></Field>
               <Field label="Responsible person" error={E("resp")} help="Answers for what the agent does.">
@@ -707,6 +776,9 @@ export function AgentsSection(_p: SectionProps) {
               </Field>
             </div>
             <Field label="Purpose" htmlFor="ag-purpose" error={E("purpose")}><TextArea id="ag-purpose" rows={2} value={ag.purpose} invalid={!!E("purpose")} onChange={(v) => set((a) => { a.purpose = v; })} /></Field>
+            <Field label="Coordinator" error={E("coord")} help="Where it sits in the organisation chart. Coordination grants no access or tools; delegated work runs with what both agents hold.">
+              <Select ariaLabel="Coordinator" value={ag.coordinatorId || ""} invalid={!!E("coord")} onChange={(v) => set((a) => { a.coordinatorId = v || null; })} options={coordOptions} />
+            </Field>
             <Field label="Data scope" error={E("scope")}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <Toggle checked={ag.scope.teamIds === "all"} disabled={!canEdit} onChange={(v) => set((a) => { a.scope = { teamIds: v ? "all" : [] }; })} label={"All " + T.teams.toLowerCase() + " (still limited to what the person asking can see)"} />
@@ -716,13 +788,49 @@ export function AgentsSection(_p: SectionProps) {
                 )}
               </div>
             </Field>
-            <div className="pk-grid2">
-              <Field label="Permitted actions"><ListEditor label="Permitted action" items={ag.permittedActions} disabled={!canEdit} placeholder="For example: read records" onChange={(v) => set((a) => { a.permittedActions = v; })} /></Field>
-              <Field label="Needs approval before acting"><ListEditor label="Action needing approval" items={ag.approvalRequired} disabled={!canEdit} placeholder="For example: change a record value" onChange={(v) => set((a) => { a.approvalRequired = v; })} /></Field>
+            <Field label="Tools" help="Restricted tools always wait for a person to approve the action in Work. Tools that need a connection keep the agent at Connection required until it is set up.">
+              <CheckList label="Tools" disabled={!canEdit} value={ag.tools || []} onChange={(v) => set((a) => { a.tools = v; })}
+                options={core.config.agentTools.map((t) => { const note = toolNote(t.id); return { value: t.id, label: t.label + (note ? " (" + note.toLowerCase() + ")" : ""), note: t.description,
+                  disabled: !!t.module && !core.config.modules[t.module]?.enabled && !(ag.tools || []).includes(t.id) }; })} />
+            </Field>
+            <SubHead>Execution limits</SubHead>
+            <div className="st-grid">
+              {([["maxDepth", "Delegation depth"], ["maxChildren", "Child runs or workers per run"], ["maxConcurrentRuns", "Runs at once"], ["maxMinutes", "Minutes per run"]] as const).map(([k, label]) => (
+                <Field key={k} label={label} error={E(k)} help={"Organisation ceiling: " + ceil[k] + "."}>
+                  <NumberInput ariaLabel={label} value={lim[k]} invalid={!!E(k)} min={k === "maxDepth" ? 0 : 1} onChange={(v) => set((a) => { a.limits = { ...(a.limits || defaults), [k]: v === null ? NaN : v }; })} />
+                </Field>
+              ))}
             </div>
+            <SubHead>Temporary workers</SubHead>
+            <Toggle checked={!!ag.spawn?.enabled} disabled={!canEdit} onChange={(v) => set((a) => { a.spawn = { ...(a.spawn || { templateIds: [], maxWorkers: 1 }), enabled: v }; })}
+              label={ag.spawn?.enabled ? "May create bounded temporary workers inside a run" : "Spawning off: it cannot create temporary workers"} />
+            {ag.spawn?.enabled && (
+              <div className="st-grid">
+                <Field label="Allowed worker templates" error={E("spawn")}>
+                  <CheckList label="Worker templates" disabled={!canEdit} value={ag.spawn.templateIds} onChange={(v) => set((a) => { a.spawn = { ...a.spawn!, templateIds: v }; })}
+                    options={workerTpls.map((t) => ({ value: t.id, label: t.label }))} />
+                </Field>
+                <Field label="Workers per run" error={E("workers")} help={"At most " + ceil.maxChildren + "."}>
+                  <NumberInput ariaLabel="Workers per run" value={ag.spawn.maxWorkers} invalid={!!E("workers")} min={1} onChange={(v) => set((a) => { a.spawn = { ...a.spawn!, maxWorkers: v === null ? NaN : v }; })} />
+                </Field>
+              </div>
+            )}
+            <Field label="Instructions" htmlFor="ag-ins" error={E("ins")} help="Plain guidance for the runtime. Never keys, passwords or tokens: provider keys are held server-side.">
+              <TextArea id="ag-ins" rows={2} value={ag.instructions || ""} onChange={(v) => set((a) => { a.instructions = v || undefined; })} />
+            </Field>
+            {!(ag.tools || []).length && (
+              <div className="pk-grid2">
+                <Field label="Permitted actions"><ListEditor label="Permitted action" items={ag.permittedActions} disabled={!canEdit} placeholder="For example: read records" onChange={(v) => set((a) => { a.permittedActions = v; })} /></Field>
+                <Field label="Needs approval before acting"><ListEditor label="Action needing approval" items={ag.approvalRequired} disabled={!canEdit} placeholder="For example: change a record value" onChange={(v) => set((a) => { a.approvalRequired = v; })} /></Field>
+              </div>
+            )}
             {E("lists") && <div className="pk-error">{E("lists")}</div>}
             </Lock>
-            <div><Button size="sm" variant="ghost" disabled={!canEdit} onClick={() => { d.update((x) => { x.splice(ai, 1); }); setSel(null); }}>Remove this agent</Button></div>
+            <div>
+              <Button size="sm" variant="ghost" disabled={!canEdit || hasRuns(ag.id) || d.draft.some((x) => x.coordinatorId === ag.id)}
+                title={hasRuns(ag.id) ? "It has run history. Archive it from the Agents page so the history is kept." : d.draft.some((x) => x.coordinatorId === ag.id) ? "Move the agents it coordinates first." : undefined}
+                onClick={() => { d.update((x) => { x.splice(ai, 1); }); setSel(null); }}>Remove this agent</Button>
+            </div>
           </>
         )}
       </div>

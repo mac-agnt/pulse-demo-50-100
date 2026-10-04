@@ -10,6 +10,12 @@ import type {
   RequestItem, Schedule, Task, WorkflowRun, Id, FieldValue, FieldMeta
 } from "../types";
 
+import { applyProjects } from "./sample-projects";
+import { applyFinance } from "./sample-finance";
+import { applyStandards } from "./sample-standards";
+import { applyAgents } from "./sample-agents";
+import { applyShell } from "./sample-shell";
+
 export const SAMPLE_REFERENCE = "2026-03-11T10:00:00.000Z"; // a Wednesday
 const TZ = "UTC";
 const at = (h: number) => addHours(SAMPLE_REFERENCE, h);
@@ -737,9 +743,26 @@ export function sampleState(): CoreState {
         message: "Simulated. Team A and B rows synced 2 h ago; Unit South rows last synced 4 days ago." },
       { sourceId: "s-import", lastAttemptAt: at(-2), lastSuccessAt: at(-2), status: "sample", message: "Simulated import" },
       { sourceId: "s-email", lastAttemptAt: at(-6), lastSuccessAt: null, status: "not_connected", message: "No email provider configured" }
-    ]
+    ],
+    projects: [], milestones: [], risks: [], projectUpdates: [], comments: [], companyUpdates: [], appointments: [],
+    budgets: [], receivables: [], transactions: [], suppliers: [], orders: [], receipts: [], invoices: [],
+    obligations: [], checkRuns: [], policyAcks: [], agentRuns: []
   };
-  return { mode: "sample", config: sampleConfig(), data, seq: 1000 };
+  const config = sampleConfig();
+  /* The sample turns every optional module on to demonstrate it. A client
+     configuration enables only what it uses. */
+  config.modules = { projects: { enabled: true }, people: { enabled: true }, finance: { enabled: true }, purchasing: { enabled: true }, standards: { enabled: true } };
+  config.locations = [
+    { id: "loc-north", label: "North office", unitId: "u-north" },
+    { id: "loc-south", label: "South office", unitId: "u-south" }
+  ];
+  /* Order matters: projects first (others link to its ids), agents last (they reference everything). */
+  applyProjects(config, data);
+  applyFinance(config, data);
+  applyStandards(config, data);
+  applyShell(config, data);
+  applyAgents(config, data);
+  return { mode: "sample", config, data, seq: 1000 };
 }
 
 export const SAMPLE_DEFAULT_VIEWER = "p-casey";

@@ -3,10 +3,11 @@
    on the same task through core operations. */
 
 import { useState } from "react";
-import { useCore, ops, openObject } from "../../core";
+import { useCore, ops, openObject, store, setTaskEstimate, moduleEnabled } from "../../core";
 import type { Task, TaskStatus } from "../../core";
 import { Button, Chip, Field, KV, LABEL, NoAccess, Notice, PersonName, Section, Select, SidePanel, TextArea, TextInput, toneOf } from "../kit";
 import { History, InlineError, isAgent, LinkRow, Muted, Rows, useClock, useRunner, useViewer, REQ_TONE, type OpenPanel } from "./shared";
+import { Comments } from "../collab/Comments";
 
 export function TaskPanel({ taskId, onClose, onOpen }: { taskId: string; onClose: () => void; onOpen?: OpenPanel }) {
   const { q } = useCore();
@@ -23,13 +24,13 @@ function TaskBody({ t, onClose, onOpen }: { t: Task; onClose: () => void; onOpen
   const deps = useRunner();
   const links = useRunner();
   const ev = useRunner();
-  const notes = useRunner();
   const [assignTo, setAssignTo] = useState("");
   const [depId, setDepId] = useState("");
   const [recId, setRecId] = useState("");
   const [evTitle, setEvTitle] = useState("");
   const [evNote, setEvNote] = useState("");
-  const [note, setNote] = useState("");
+  const [est, setEst] = useState(typeof t.estimateHours === "number" ? String(t.estimateHours) : "");
+  const [estErr, setEstErr] = useState<string | null>(null);
 
   const openTask = (id: string) => (onOpen ? onOpen({ kind: "task", id }) : openObject("task", id));
   const overdue = q.isOverdue(t);
@@ -62,6 +63,16 @@ function TaskBody({ t, onClose, onOpen }: { t: Task; onClose: () => void; onOpen
   const schedule = t.scheduleId ? core.data.schedules.find((s) => s.id === t.scheduleId) : undefined;
   const sla = core.config.slaPolicies.find((p) => p.id === t.slaPolicyId);
   const roleLabel = (id: string) => core.config.roles.find((r) => r.id === id)?.label || id;
+  const project = t.projectId ? core.data.projects.find((p) => p.id === t.projectId) : undefined;
+  const projectVisible = !!project && q.canSee({ ownerIds: [project.ownerId], teamId: project.teamId, unitId: project.unitId, visibility: project.visibility });
+  const milestone = t.milestoneId ? core.data.milestones.find((m) => m.id === t.milestoneId) : undefined;
+  const saveEstimate = (clear: boolean) => {
+    const n = clear ? null : Number(est);
+    if (!clear && (!est.trim() || !Number.isFinite(n))) { setEstErr("Give the estimate in hours, for example 2.5."); return; }
+    const r = store.run(setTaskEstimate, t.id, n);
+    setEstErr(r.ok ? null : r.error);
+    if (r.ok && clear) setEst("");
+  };
 
   return (
     <SidePanel open onClose={onClose} width={640} eyebrow={"Task" + (t.teamId ? " · " + q.teamLabel(t.teamId) : "")} title={t.title}
@@ -80,6 +91,10 @@ function TaskBody({ t, onClose, onOpen }: { t: Task; onClose: () => void; onOpen
           ["Team", q.teamLabel(t.teamId)],
           ["Due", t.dueAt ? dt(t.dueAt) + " (" + rel(t.dueAt) + ")" : "No due date"],
           ["Priority", LABEL.priority[t.priority]],
+          ...(project ? [[core.config.projects.label || "Project", projectVisible && moduleEnabled(core.config, "projects")
+            ? <button key="p" type="button" className="wk-plink" onClick={() => openObject("project", project.id)}>{project.title}{milestone ? ", " + milestone.label : ""}</button>
+            : projectVisible ? project.title : "A project you cannot see"] as [string, React.ReactNode]] : []),
+          ["Estimate", typeof t.estimateHours === "number" ? t.estimateHours + " h" : "Unestimated (not counted as zero)"],
           ["Created", dt(t.createdAt) + (agent || t.createdBy === "system" ? "" : ", by " + q.name(t.createdBy))],
           ...(t.completedAt ? [["Completed", dt(t.completedAt)] as [string, string]] : [])
         ]} />
@@ -235,7 +250,21 @@ function TaskBody({ t, onClose, onOpen }: { t: Task; onClose: () => void; onOpen
         </Section>
       )}
 
-      <Section label="Notes">
+      <Section label="Effort estimate">
+        <div className="wk-row">
+          <div style={{ width: 140 }}><TextInput ariaLabel="Estimate in hours" type="number" value={est} onChange={(x) => { setEst(x); setEstErr(null); }} placeholder="Hours" /></div>
+          <Button disabled={!canAct} title={canAct ? "Save the estimate" : actReason} onClick={() => saveEstimate(false)}>Save estimate</Button>
+          {typeof t.estimateHours === "number" && <Button variant="ghost" disabled={!canAct} title={canAct ? undefined : actReason} onClick={() => saveEstimate(true)}>Clear</Button>}
+        </div>
+        <div className="wk-small" style={{ marginTop: 6 }}>Weekly allocation in People adds up estimates. A task without one is shown as unestimated, never as zero hours.</div>
+        <InlineError text={estErr} />
+      </Section>
+
+      <Section label="Comments">
+        <Comments objectType="task" objectId={t.id} />
+      </Section>
+
+      {t.notes.length > 0 && <Section label="Earlier notes">
         {t.notes.length === 0 ? <Muted>No notes yet.</Muted> : (
           <Rows>
             {t.notes.map((n) => (
@@ -247,15 +276,7 @@ function TaskBody({ t, onClose, onOpen }: { t: Task; onClose: () => void; onOpen
             ))}
           </Rows>
         )}
-        <div style={{ marginTop: 10 }}>
-          <Field label="Add a note" htmlFor="tn-note"><TextArea id="tn-note" value={note} onChange={setNote} rows={2} /></Field>
-          <div className="wk-row" style={{ marginTop: 8 }}>
-            <span className="pk-grow" />
-            <Button disabled={!note.trim()} title={note.trim() ? undefined : "Write something first"} onClick={() => { if (notes.run(ops.addTaskNote, t.id, note).ok) setNote(""); }}>Add note</Button>
-          </div>
-          <InlineError text={notes.err} />
-        </div>
-      </Section>
+      </Section>}
 
       <Section label="Deadline policy">
         {sla ? (

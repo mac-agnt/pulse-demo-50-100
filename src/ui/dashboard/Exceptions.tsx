@@ -3,7 +3,7 @@
    existing object. */
 
 import type { ReactNode } from "react";
-import { useCore, openObject, relative, type Tone } from "../../core";
+import { useCore, openObject, relative, personRows, type Tone } from "../../core";
 import { attention, type AttentionItem } from "../selectors";
 import { Pill } from "../frame";
 import { CardHead, EmptyNote, Glass } from "./parts";
@@ -53,5 +53,29 @@ export function ExceptionsCard({ limit = 6, kinds, title = "Exceptions" }: { lim
       empty={{ title: "Nothing needs attention", body: kinds && kinds.length === 1 && kinds[0] === "issue"
         ? "High-severity data issues in this scope appear here."
         : "Failed runs, failed actions, late decisions, overdue or blocked tasks and high-severity data issues in this scope appear here." }} />
+  );
+}
+
+/** People who need an action: lapsed certificates, probation reviews within 30 days, unsigned documents.
+    Only employment records the viewer may see are counted. */
+export function PeopleExceptions({ limit = 6 }: { limit?: number }) {
+  const { q } = useCore();
+  const rows = personRows(q);
+  const needs = rows.filter((r) => r.certIssue === "lapsed" || (r.probationDueDays !== null && r.probationDueDays <= 30) || r.docsOutstanding > 0);
+  const exc: ExceptionRow[] = needs.slice(0, limit).map((r) => {
+    const why = [
+      r.certIssue === "lapsed" ? "certificate lapsed" : null,
+      r.probationDueDays !== null && r.probationDueDays <= 30 ? (r.probationDueDays < 0 ? "probation review overdue" : "probation review in " + r.probationDueDays + " days") : null,
+      r.docsOutstanding > 0 ? r.docsOutstanding + (r.docsOutstanding === 1 ? " document" : " documents") + " to sign" : null
+    ].filter(Boolean).join(", ");
+    return { key: r.person.id, tone: r.certIssue === "lapsed" ? "bad" : "warn", tag: r.certIssue === "lapsed" ? "Lapsed" : "Action", title: r.person.name,
+      reason: r.team + (r.unit ? ", " + r.unit : "") + ". " + why.charAt(0).toUpperCase() + why.slice(1) + ".",
+      onOpen: () => { dashStore.set({ metricId: null }); openObject("person", r.person.id); } };
+  });
+  return (
+    <ExceptionList title="People needing an action" rows={exc} total={needs.length}
+      empty={{ title: rows.length ? "Nobody needs an action" : "No people in this scope", body: rows.length
+        ? "Lapsed certificates, probation reviews due within 30 days and unsigned documents appear here."
+        : "Employment details are added in People." }} />
   );
 }

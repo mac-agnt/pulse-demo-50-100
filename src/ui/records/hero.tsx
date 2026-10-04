@@ -50,10 +50,38 @@ export interface HeroProps {
   actions?: ReactNode;
   searchLabel: string;
   disabled?: boolean;
+  /** Working-page header: one row with title, search and actions, so the list starts near the top. */
+  compact?: boolean;
 }
 
 export function RecordsHero(p: HeroProps) {
   const asking = p.query.trim().length > 0;
+  if (p.compact) {
+    return (
+      <div className="rh-hero rh-hero--compact">
+        <div className="rh-compact-t">
+          <div className="pf-eyebrow">{p.eyebrow}</div>
+          <h1 className="rh-title">{p.title}</h1>
+        </div>
+        <div className="rh-compact-s">
+          <div className="rh-field ixz">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="1.9" strokeLinecap="round" style={{ flex: "none" }} aria-hidden="true">
+              <path d="m21 21-4.3-4.3 M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0" />
+            </svg>
+            <input type="search" value={p.query} onChange={(e) => p.onQuery(e.target.value)} placeholder={p.placeholder} aria-label={p.searchLabel}
+              disabled={p.disabled} onKeyDown={(e) => { if (e.key === "Escape") p.onQuery(""); }} />
+            {asking && (
+              <button type="button" className="rh-clear ixm" onClick={() => p.onQuery("")} aria-label="Clear search" title="Clear search">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12 M18 6 6 18" /></svg>
+              </button>
+            )}
+          </div>
+          {asking && <div className="rh-answer" aria-live="polite" style={{ marginTop: 6 }}>{p.answer}</div>}
+        </div>
+        {p.actions && <div className="rh-compact-a">{p.actions}</div>}
+      </div>
+    );
+  }
   return (
     <div className="rh-hero">
       {p.actions && <div className="rh-actions">{p.actions}</div>}
@@ -95,12 +123,12 @@ export function HeroAdd({ onClick, label, disabled, title }: { onClick: () => vo
 }
 
 /** Glass card in the Records style (the original Directory card). */
-export function RecCard({ title, caption, badge, right, children, footer }: {
-  title: ReactNode; caption?: ReactNode; badge?: ReactNode; right?: ReactNode; children: ReactNode; footer?: ReactNode;
+export function RecCard({ title, caption, badge, right, children, footer, compact }: {
+  title: ReactNode; caption?: ReactNode; badge?: ReactNode; right?: ReactNode; children: ReactNode; footer?: ReactNode; compact?: boolean;
 }) {
   return (
     <section className="rh-card">
-      <div className="rh-card-h">
+      <div className={"rh-card-h" + (compact ? " rh-card-h--compact" : "")}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="rh-card-t">{title}</div>
           {caption && <div className="rh-card-c">{caption}</div>}

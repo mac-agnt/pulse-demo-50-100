@@ -1,0 +1,90 @@
+/* Finance and Purchasing pages (src/ui/finance, src/ui/purchasing). Theme tokens only. */
+.fx .pk-table{font-size:14px}
+.fx .pk-table td{height:46px}
+.fx-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:16px 4px 16px}
+.fx-title{margin:6px 0 0;font-size:28px;font-weight:500;letter-spacing:-.8px;line-height:1.1}
+.fx-meta{font-size:12.5px;color:var(--dim);margin-top:7px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;line-height:1.45}
+.fx-num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.fx-neg{color:var(--bad)}
+.fx-pos{color:var(--ok)}
+.fx-faint{color:var(--faint)}
+.fx-dim{color:var(--dim)}
+.fx-small{font-size:12px}
+.fx-bar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+
+.fx-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.fx-kpis .pf-kpi{padding:14px 16px 16px}
+.fx-kpis .pf-kpi-v{font-family:var(--mono);font-size:24px;letter-spacing:-.5px}
+.fx-kpis .pf-kpi-s{font-size:11.5px;line-height:1.4}
+@media (max-width:1180px){.fx-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){.fx-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fx-note{font-size:12px;color:var(--dim);margin:8px 2px 0;line-height:1.5}
+
+.fx-grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px;margin-top:14px;align-items:start}
+@media (max-width:1000px){.fx-grid2{grid-template-columns:1fr}}
+.fx-gap{margin-top:14px}
+
+.fx-table-wrap{overflow-x:auto;max-width:100%}
+.fx-table{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
+.fx-table--narrow{min-width:420px}
+.fx-table th{text-align:left;font-weight:500;font-size:11.5px;color:var(--faint);padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-faint);white-space:nowrap}
+.fx-table td{padding:0 12px;height:46px;border-bottom:1px solid var(--border);color:var(--body);white-space:nowrap}
+.fx-table tr:last-child td{border-bottom:0}
+.fx-table .r{text-align:right}
+.fx-table td.ink{color:var(--ink)}
+.fx-table tr.fx-click{cursor:pointer;transition:background .14s var(--ease)}
+.fx-table tr.fx-click:hover td{background:var(--surface-2)}
+.fx-table tr.fx-click:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fx-sub{display:block;font-size:12px;color:var(--faint);margin-top:2px}
+
+.fx-bar{position:relative;height:8px;border-radius:4px;background:var(--track);overflow:hidden;min-width:110px}
+.fx-bar span{position:absolute;top:0;bottom:0}
+.fx-bar .fx-b-inv{background:var(--accent)}
+.fx-bar .fx-b-com{background:var(--accent-soft)}
+.fx-bar .fx-b-paid{background:var(--ok);height:3px;top:auto;bottom:0}
+.fx-bar .fx-b-over{background:var(--bad)}
+.fx-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--dim);padding:0 20px 14px}
+.fx-legend i{display:inline-block;width:10px;height:8px;border-radius:2px;margin-right:6px;vertical-align:0}
+
+.fx-defs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 20px;font-size:12px;color:var(--dim);padding:12px 20px 16px;border-top:1px solid var(--border);line-height:1.45}
+.fx-defs b{color:var(--body);font-weight:500}
+
+.fx-li{display:flex;align-items:center;gap:12px;padding:0 20px;min-height:46px;border-top:1px solid var(--border);font-size:14px;width:100%;box-sizing:border-box;background:none;border-left:0;border-right:0;border-bottom:0;font-family:inherit;color:var(--body);text-align:left}
+button.fx-li{cursor:pointer;transition:background .14s var(--ease)}
+button.fx-li:hover{background:var(--surface-2)}
+button.fx-li:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fx-li-main{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-date{font-family:var(--mono);font-size:12px;color:var(--dim);width:54px;flex:none}
+
+.fx-stage{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0}
+.fx-stage > div{padding:10px 12px;background:var(--chip);border:1px solid var(--chip-border);border-radius:var(--r-sm,9px);min-width:0}
+.fx-stage dt{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
+.fx-stage dd{margin:5px 0 0;font-family:var(--mono);font-size:15px;color:var(--ink);white-space:nowrap}
+.fx-stage p{margin:6px 0 0;font-size:11.5px;color:var(--faint);line-height:1.4}
+@media (max-width:760px){.fx-stage{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.fx-age{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (max-width:760px){.fx-age{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fx-age button{all:unset;box-sizing:border-box;cursor:pointer;padding:12px 14px;border-radius:var(--r-sm,9px);background:var(--chip);border:1px solid var(--chip-border);min-width:0}
+.fx-age button[aria-pressed="true"]{border-color:var(--accent-line);background:var(--accent-faint)}
+.fx-age button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fx-age-l{display:block;font-size:11.5px;color:var(--dim)}
+.fx-age-v{display:block;font-family:var(--mono);font-size:17px;color:var(--ink);margin-top:4px}
+.fx-age-n{display:block;font-size:11.5px;color:var(--faint);margin-top:2px}
+
+.fx-link{all:unset;cursor:pointer;color:var(--accent);border-radius:4px}
+.fx-link:hover{text-decoration:underline;text-underline-offset:3px}
+.fx-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fx-flags{display:inline-flex;gap:6px;flex-wrap:wrap}
+.fx-why{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.fx-why li{font-size:13px;color:var(--body);line-height:1.5}
+.fx-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fx-form{display:flex;flex-direction:column;gap:14px}
+.fx-form-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:560px){.fx-form-2{grid-template-columns:1fr}}
+.fx-hist{margin:0;padding:0;list-style:none}
+.fx-hist li{display:flex;gap:10px;font-size:12.5px;color:var(--body);padding:7px 0;border-top:1px solid var(--border);line-height:1.45}
+.fx-hist li:first-child{border-top:0}
+.fx-hist time{font-family:var(--mono);font-size:11px;color:var(--faint);flex:none;width:92px}
+.fx-mini th,.fx-mini td{height:38px;font-size:13px}
+.fx-mini{min-width:0}

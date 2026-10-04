@@ -189,3 +189,37 @@ html[data-density="compact"] .pk-li{padding:7px 12px}
 .tn-chips button[aria-pressed="true"]{border-color:var(--accent-line);background:var(--accent-soft);color:var(--accent)}
 .tn-foot{display:flex;align-items:center;gap:10px;width:100%;margin-top:6px;padding:10px;border:0;border-radius:14px;background:none;color:var(--dim);font:inherit;font-size:13px;cursor:pointer;text-align:left}
 .tn-foot:hover{background:var(--surface-2);color:var(--ink)}
+
+/* Side rail group labels (open rail only). */
+.pk-railgroup{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:14px 10px 4px;white-space:nowrap}
+
+/* Module switcher groups, pins and the compact scope control (src/ui/topnav.tsx). */
+.tn-group + .tn-group{margin-top:10px}
+.tn-modrow{display:flex;align-items:center;gap:2px}
+.tn-modrow > .tn-mod{flex:1;min-width:0}
+.tn-pin{flex:none;width:34px;height:34px;border:0;border-radius:12px;background:none;color:var(--faint);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.tn-pin:hover,.tn-pin:focus-visible{background:var(--surface-2);color:var(--ink)}
+.tn-pin[aria-pressed="true"]{color:var(--accent)}
+.tn-note{font-size:11.5px;color:var(--faint);padding:6px 10px 2px;line-height:1.45}
+.tn-btn--scope{height:34px;padding:0 11px 0 10px;gap:7px;font-size:12.5px;font-weight:500;color:var(--body);background:none;max-width:200px}
+.tn-btn--scope:hover{background:var(--surface-2)}
+.tn-btn--module{max-width:220px}
+
+/* Side rail group labels: quieter than items, never wrap. */
+.pk-railgroup{font-size:9px;letter-spacing:.16em;color:var(--faint);opacity:.85;padding:16px 12px 5px;overflow:hidden;text-overflow:ellipsis}
+
+/* Demo indicator and menu in the rail (src/ui/shell.tsx). */
+.dm-pill{display:flex;align-items:center;gap:8px;width:100%;height:34px;margin:4px 0 2px;padding:0 12px;border:1px dashed var(--border-strong);border-radius:999px;background:none;
+  color:var(--dim);font:inherit;font-size:12px;cursor:pointer;text-align:left;transition:border-color .18s var(--ease),color .18s var(--ease)}
+.dm-pill:hover,.dm-pill[aria-expanded="true"]{border-color:var(--accent-line);color:var(--ink)}
+.dm-pill--shut{width:44px;height:26px;padding:0;justify-content:center;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em}
+.dm-dot{width:6px;height:6px;flex:none;border-radius:2px;background:var(--warn)}
+.dm-pill--clean .dm-dot{background:var(--neutral)}
+.dm-who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--faint)}
+.dm-menu{position:fixed;z-index:92;width:300px;padding:14px;background:var(--overlay);border:1px solid var(--border-strong);border-radius:20px;backdrop-filter:blur(40px) saturate(1.3);
+  box-shadow:0 24px 60px rgba(0,0,0,.45);animation:pkFade .16s var(--ease) both}
+.dm-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+.dm-note{font-size:11.5px;color:var(--faint);line-height:1.45;margin-top:10px}
+.dm-actions{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.dm-actions .pk-btn{justify-content:flex-start}
+@media (prefers-reduced-motion:reduce){ .dm-menu{animation:none} }

@@ -18,6 +18,10 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: "sla", group: "CONTROL", title: "Deadlines & escalation", blurb: "Service deadlines, business hours and escalation owners." },
   { id: "notifications", group: "CONTROL", title: "Notification routing", blurb: "Which events notify whom, and through which channel." },
   { id: "agents", group: "CONTROL", title: "Agent controls", blurb: "Agent purpose, responsible person, data scope and permitted actions." },
+  { id: "orchestration", group: "CONTROL", title: "Agent orchestration", blurb: "Runtime adapter, execution limits, delegation depth and spawn policies." },
+  { id: "projectSetup", group: "CONTROL", title: "Project types & phases", blurb: "Project label, types, phases, templates and how progress is measured." },
+  { id: "purchasingRules", group: "CONTROL", title: "Purchasing & finance rules", blurb: "Matching tolerance, receipt rules, reporting currency and budgets." },
+  { id: "standardsSetup", group: "CONTROL", title: "Standards & requirements", blurb: "Requirements, who they apply to, checks and policy acknowledgements." },
   { id: "connections", group: "SYSTEMS", title: "Connections & sync", blurb: "Connection status, sync health and recovery." },
   { id: "mappings", group: "SYSTEMS", title: "Field mapping & source of truth", blurb: "Which system owns each field, and code mappings." },
   { id: "recordTypes", group: "SYSTEMS", title: "Record types", blurb: "Record types, fields, validation and statuses." },
@@ -26,6 +30,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: "documents", group: "GOVERNANCE", title: "Document governance", blurb: "Review cycles, restricted documents and use in answers." },
   { id: "audit", group: "GOVERNANCE", title: "Audit log", blurb: "Every configuration change, who made it and when." },
   { id: "terminology", group: "EXPERIENCE", title: "Terminology", blurb: "The words this organisation uses for units, teams, records and requests." },
+  { id: "modules", group: "EXPERIENCE", title: "Modules & labels", blurb: "Which business modules are on, what they are called and their page labels." },
   { id: "views", group: "EXPERIENCE", title: "Enabled views", blurb: "Which capabilities and tabs are switched on." },
   { id: "layouts", group: "EXPERIENCE", title: "Role defaults & dashboards", blurb: "Default Home view and dashboard for each role." },
   { id: "appearance", group: "EXPERIENCE", title: "Appearance & density", blurb: "Theme and display density." }

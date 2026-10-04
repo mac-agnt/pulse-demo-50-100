@@ -13,7 +13,8 @@ import type { CoreState, Ctx, ScopeSel } from "./types";
 import type { Result } from "./ops";
 
 export interface Focus {
-  kind: "record" | "task" | "approval" | "run" | "issue" | "file" | "request" | "metric" | "ids" | "event" | "schedule";
+  kind: "record" | "task" | "approval" | "run" | "issue" | "file" | "request" | "metric" | "ids" | "event" | "schedule"
+    | "project" | "milestone" | "agent" | "agentRun" | "invoice" | "order" | "obligation" | "budget" | "person" | "supplier" | "unit" | "team" | "appointment";
   id?: string;
   ids?: string[];
   label?: string;
@@ -33,8 +34,9 @@ export interface Session {
 
 interface Snapshot { core: CoreState; session: Session; ctx: Ctx; q: Q }
 
-const KEY = "pulse.core.v1";
-const SKEY = "pulse.session.v1";
+/* v2: adds projects, finance, purchasing, standards and agent runs. Older saved state is not migrated; the sample loads fresh. */
+const KEY = "pulse.core.v3";
+const SKEY = "pulse.session.v3";
 
 function freshSession(core: CoreState): Session {
   const viewerId = core.mode === "sample" ? SAMPLE_DEFAULT_VIEWER : CLEAN_DEFAULT_VIEWER;

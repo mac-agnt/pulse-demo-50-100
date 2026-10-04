@@ -1,10 +1,15 @@
-/* The one record panel. Any page can open it with a record id; every edit,
-   relationship and merge undo goes through ops, so the same record updates
-   everywhere it appears. */
+/* The one record panel, one pattern everywhere: Overview / Related work /
+   Files / History / Sources, with tabs that have nothing to show hidden.
+   Any page can open it with a record id; every edit, relationship, comment
+   and merge undo goes through ops, so the same record updates everywhere it
+   appears. Related work lists the canonical tasks, requests, projects and
+   obligations linked to the record; "Explore relationships" opens the
+   Relationships tab focused on it. */
 
 import { useMemo, useState } from "react";
-import { useCore, store, ops, can, openObject, ms, fmtDateTime, ISSUE_LABEL, HOUR } from "../../core";
-import type { AuditEvent, FieldValue, FileDoc, Id, RecordItem, RequestItem, Task, WorkflowRun } from "../../core";
+import { useCore, store, ops, can, openObject, navigate, moduleEnabled, ms, fmtDateTime, ISSUE_LABEL, HOUR } from "../../core";
+import type { AuditEvent, FieldValue, FileDoc, Id, Obligation, Project, RecordItem, RequestItem, Task, WorkflowRun } from "../../core";
+import { Comments } from "../collab/Comments";
 import {
   Button, Chip, Empty, Field, KV, Notice, PersonName, Section, Select, SidePanel, Tabs, TextInput, LABEL, toneOf
 } from "../kit";
@@ -13,7 +18,7 @@ import {
   RecordStatus, Ref, VISIBILITY_LABEL, When, fmtField, isOpenIssue, sourceLabel, typeOf
 } from "./common";
 
-type TabId = "overview" | "related" | "history" | "sources";
+type TabId = "overview" | "related" | "files" | "history" | "sources";
 
 const latest = (xs: (string | null | undefined)[]) => xs.filter(Boolean).sort().pop() as string | undefined;
 
@@ -33,6 +38,18 @@ export function RecordPanel({ recordId, onClose }: { recordId: Id | null | undef
 
 export default RecordPanel;
 
+/** Projects and obligations that point at a record, through its tasks, requests, suppliers or requirements. */
+function useRecordLinks(r: RecordItem, tasks: Task[], requests: RequestItem[]): { projects: Project[]; obligations: Obligation[] } {
+  const { core, q } = useCore();
+  const projIds = new Set<Id>([...tasks.map((t) => t.projectId), ...requests.map((x) => (typeof x.fields.projectId === "string" ? x.fields.projectId : undefined))].filter((x): x is Id => !!x));
+  const projects = moduleEnabled(core.config, "projects")
+    ? core.data.projects.filter((p) => projIds.has(p.id) && q.canSee({ ownerIds: [p.ownerId], teamId: p.teamId, unitId: p.unitId, visibility: p.visibility })) : [];
+  const supplierIds = new Set(core.data.suppliers.filter((x) => x.recordId === r.id).map((x) => x.id));
+  const obligations = moduleEnabled(core.config, "standards")
+    ? core.data.obligations.filter((o) => (o.subject.kind === "record" && o.subject.id === r.id) || (o.subject.kind === "supplier" && supplierIds.has(o.subject.id))) : [];
+  return { projects, obligations };
+}
+
 function RecordPanelBody({ r, onClose }: { r: RecordItem; onClose: () => void }) {
   const { core, q } = useCore();
   const type = typeOf(core, r.typeId);
@@ -41,13 +58,15 @@ function RecordPanelBody({ r, onClose }: { r: RecordItem; onClose: () => void })
   const requests = q.requests({ ignoreScope: true }).filter((x) => x.linkedRecordIds.includes(r.id) || x.fields.recordId === r.id);
   const files = q.files({ ignoreScope: true }).filter((f) => f.linkedRecordIds.includes(r.id));
   const runs = q.runs({ ignoreScope: true }).filter((x) => x.affectedRecordIds.includes(r.id));
+  const { projects, obligations } = useRecordLinks(r, tasks, requests);
   const timeline = q.timeline(r.id);
   const mappings = core.config.fieldMappings.filter((m) => m.recordTypeId === r.typeId);
   const canEdit = can(q.viewer, "records.edit");
-  const relatedCount = related.length + tasks.length + requests.length + files.length + runs.length;
+  const workCount = tasks.length + requests.length + projects.length + obligations.length + runs.length;
 
   const tabs: { value: TabId; label: string; count?: number }[] = [{ value: "overview", label: "Overview" }];
-  if (relatedCount > 0 || (canEdit && !r.mergedInto)) tabs.push({ value: "related", label: "Related", count: relatedCount });
+  if (workCount > 0) tabs.push({ value: "related", label: "Related work", count: workCount });
+  if (files.length > 0) tabs.push({ value: "files", label: "Files", count: files.length });
   tabs.push({ value: "history", label: "History", count: timeline.length });
   if (r.sourceRefs.length > 0 || mappings.length > 0) tabs.push({ value: "sources", label: "Sources", count: r.sourceRefs.length });
   const [tab, setTab] = useState<TabId>("overview");
@@ -57,8 +76,9 @@ function RecordPanelBody({ r, onClose }: { r: RecordItem; onClose: () => void })
     <SidePanel open onClose={onClose} width={640} eyebrow={(type?.label || "Record") + " · " + r.ref}
       chips={<><RecordStatus r={r} />{r.mergedInto && <Chip tone="neutral">Merged</Chip>}</>} title={r.title}>
       {tabs.length > 1 && <Tabs tabs={tabs} value={active} onChange={setTab} />}
-      {active === "overview" && <Overview r={r} canEdit={canEdit} />}
-      {active === "related" && <Related r={r} canEdit={canEdit} related={related} tasks={tasks} requests={requests} files={files} runs={runs} />}
+      {active === "overview" && <Overview r={r} canEdit={canEdit} related={related} onClose={onClose} />}
+      {active === "related" && <RelatedWork tasks={tasks} requests={requests} projects={projects} obligations={obligations} runs={runs} />}
+      {active === "files" && <FilesTab files={files} />}
       {active === "history" && <History r={r} events={timeline} />}
       {active === "sources" && <Sources r={r} />}
     </SidePanel>
@@ -67,7 +87,7 @@ function RecordPanelBody({ r, onClose }: { r: RecordItem; onClose: () => void })
 
 /* ── Overview ──────────────────────────────────────────────────────────── */
 
-function Overview({ r, canEdit }: { r: RecordItem; canEdit: boolean }) {
+function Overview({ r, canEdit, related, onClose }: { r: RecordItem; canEdit: boolean; related: { record: RecordItem; label: string; direction: "out" | "in" }[]; onClose: () => void }) {
   const { core, q } = useCore();
   const type = typeOf(core, r.typeId);
   const [editing, setEditing] = useState<string | null>(null);
@@ -151,18 +171,20 @@ function Overview({ r, canEdit }: { r: RecordItem; canEdit: boolean }) {
           </List>
         )}
       </Section>
+
+      <RelatedRecords r={r} canEdit={canEdit} related={related} onClose={onClose} />
+
+      <Section label="Comments">
+        <Comments objectType="record" objectId={r.id} />
+      </Section>
     </>
   );
 }
 
-/* ── Related ───────────────────────────────────────────────────────────── */
+/* ── Related records (record-to-record links) ─────────────────────────── */
 
-function Related({ r, canEdit, related, tasks, requests, files, runs }: {
-  r: RecordItem; canEdit: boolean;
-  related: { record: RecordItem; label: string; direction: "out" | "in" }[];
-  tasks: Task[]; requests: RequestItem[]; files: FileDoc[]; runs: WorkflowRun[];
-}) {
-  const { q } = useCore();
+function RelatedRecords({ r, canEdit, related, onClose }: { r: RecordItem; canEdit: boolean; related: { record: RecordItem; label: string; direction: "out" | "in" }[]; onClose: () => void }) {
+  const { core, q } = useCore();
   const [adding, setAdding] = useState(false);
   const [to, setTo] = useState("");
   const [label, setLabel] = useState("relates to");
@@ -173,43 +195,56 @@ function Related({ r, canEdit, related, tasks, requests, files, runs }: {
     const res = store.run(ops.addRelationship, r.id, to, label.trim() || "relates to");
     if (res.ok) { setAdding(false); setTo(""); setLabel("relates to"); }
   };
-  const reqTone = (s: string) => s === "approved" ? "ok" as const : s === "declined" ? "bad" as const : s === "changes_requested" ? "warn" as const : s === "submitted" ? "accent" as const : "neutral" as const;
-
+  const explore = () => { onClose(); navigate({ page: "Records", section: "relationships", focus: { kind: "record", id: r.id } }); };
   return (
-    <>
-      <Section label={"Records · " + related.length}
-        right={canEdit && !r.mergedInto && !adding ? <Button size="sm" onClick={() => setAdding(true)}>Add relationship</Button> : undefined}>
-        {adding && (
-          <div className="rc-fields" style={{ marginBottom: 10 }}>
-            <div className="rc-edit">
-              <Field label="Related record" htmlFor="rc-rel-to">
-                <Select id="rc-rel-to" value={to} onChange={setTo}
-                  options={[{ value: "", label: candidates.length ? "Choose a record" : "No other records you can see" }, ...candidates.map((x) => ({ value: x.id, label: x.ref + " " + x.title }))]} />
-              </Field>
-              <Field label="Relationship" htmlFor="rc-rel-label" help={"Reads as: " + r.ref + " " + (label.trim() || "relates to") + " the chosen record."}>
-                <TextInput id="rc-rel-label" value={label} onChange={setLabel} />
-              </Field>
-              <div className="rc-row">
-                <Button variant="primary" size="sm" disabled={!to} title={!to ? "Choose a record first" : undefined} onClick={add}>Add</Button>
-                <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
-              </div>
+    <Section label={"Related records · " + related.length}
+      right={<span className="rc-row">
+        {core.config.capabilities.ontology && <Button size="sm" variant="ghost" onClick={explore} title="Open Relationships focused on this record">Explore relationships</Button>}
+        {canEdit && !r.mergedInto && !adding && <Button size="sm" onClick={() => setAdding(true)}>Add relationship</Button>}
+      </span>}>
+      {adding && (
+        <div className="rc-fields" style={{ marginBottom: 10 }}>
+          <div className="rc-edit">
+            <Field label="Related record" htmlFor="rc-rel-to">
+              <Select id="rc-rel-to" value={to} onChange={setTo}
+                options={[{ value: "", label: candidates.length ? "Choose a record" : "No other records you can see" }, ...candidates.map((x) => ({ value: x.id, label: x.ref + " " + x.title }))]} />
+            </Field>
+            <Field label="Relationship" htmlFor="rc-rel-label" help={"Reads as: " + r.ref + " " + (label.trim() || "relates to") + " the chosen record."}>
+              <TextInput id="rc-rel-label" value={label} onChange={setLabel} />
+            </Field>
+            <div className="rc-row">
+              <Button variant="primary" size="sm" disabled={!to} title={!to ? "Choose a record first" : undefined} onClick={add}>Add</Button>
+              <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>Cancel</Button>
             </div>
           </div>
-        )}
-        {related.length === 0 ? <div className="rc-small">No related records yet.</div> : (
-          <List>
-            {related.map((x) => (
-              <ListButton key={x.record.id + x.direction} onClick={() => openObject("record", x.record.id)}>
-                <span className="rc-small" style={{ flex: "none", minWidth: 110 }}>{x.direction === "out" ? "This " + x.label : x.label + " this"}</span>
-                <Ref>{x.record.ref}</Ref>
-                <Grow>{x.record.title}</Grow>
-                <RecordStatus r={x.record} />
-              </ListButton>
-            ))}
-          </List>
-        )}
-      </Section>
+        </div>
+      )}
+      {related.length === 0 ? <div className="rc-small">No related records yet.</div> : (
+        <List>
+          {related.map((x) => (
+            <ListButton key={x.record.id + x.direction} onClick={() => openObject("record", x.record.id)}>
+              <span className="rc-small" style={{ flex: "none", minWidth: 110 }}>{x.direction === "out" ? "This " + x.label : x.label + " this"}</span>
+              <Ref>{x.record.ref}</Ref>
+              <Grow>{x.record.title}</Grow>
+              <RecordStatus r={x.record} />
+            </ListButton>
+          ))}
+        </List>
+      )}
+    </Section>
+  );
+}
 
+/* ── Related work ──────────────────────────────────────────────────────── */
+
+const OB_LABEL: Record<Obligation["state"], string> = { missing: "Missing", received: "Received, not reviewed", under_review: "Under review", approved: "Approved", rejected: "Rejected", expired: "Expired" };
+const OB_TONE: Record<Obligation["state"], "ok" | "warn" | "bad" | "neutral" | "accent"> = { missing: "bad", received: "warn", under_review: "accent", approved: "ok", rejected: "bad", expired: "bad" };
+
+function RelatedWork({ tasks, requests, projects, obligations, runs }: { tasks: Task[]; requests: RequestItem[]; projects: Project[]; obligations: Obligation[]; runs: WorkflowRun[] }) {
+  const { core, q } = useCore();
+  const reqTone = (s: string) => s === "approved" ? "ok" as const : s === "declined" ? "bad" as const : s === "changes_requested" ? "warn" as const : s === "submitted" ? "accent" as const : "neutral" as const;
+  return (
+    <>
       <Section label={"Tasks · " + tasks.length}>
         {tasks.length === 0 ? <div className="rc-small">No tasks linked to this record.</div> : (
           <List>
@@ -242,25 +277,33 @@ function Related({ r, canEdit, related, tasks, requests, files, runs }: {
         )}
       </Section>
 
-      <Section label={"Files · " + files.length}>
-        {files.length === 0 ? <div className="rc-small">No files linked to this record.</div> : (
+      {projects.length > 0 && (
+        <Section label={(core.config.projects.plural || "Projects") + " · " + projects.length}>
           <List>
-            {files.map((f) => {
-              const v = [...f.versions].sort((a, b) => b.n - a.n)[0];
-              return (
-                <ListButton key={f.id} onClick={() => openObject("file", f.id)}>
-                  <Grow>{f.title}</Grow>
-                  <span className="rc-small" style={{ flex: "none" }}>{f.kind}{v ? ", v" + v.n : ""}</span>
-                  {f.restrictedTo?.length ? <Chip tone="warn">Restricted</Chip> : null}
-                </ListButton>
-              );
-            })}
+            {projects.map((p) => (
+              <ListButton key={p.id} onClick={() => openObject("project", p.id)}>
+                <Ref>{p.ref}</Ref><Grow>{p.title}</Grow><span className="rc-small" style={{ flex: "none" }}>{q.name(p.ownerId)}</span>
+              </ListButton>
+            ))}
           </List>
-        )}
-      </Section>
+        </Section>
+      )}
 
-      <Section label={"Workflow runs · " + runs.length}>
-        {runs.length === 0 ? <div className="rc-small">No workflow runs touched this record.</div> : (
+      {obligations.length > 0 && (
+        <Section label={"Requirements · " + obligations.length}>
+          <List>
+            {obligations.map((o) => (
+              <ListButton key={o.id} onClick={() => openObject("obligation", o.id)}>
+                <Grow>{core.config.standards.requirements.find((x) => x.id === o.requirementId)?.label || o.requirementId}</Grow>
+                <Chip tone={OB_TONE[o.state]}>{OB_LABEL[o.state]}</Chip>
+              </ListButton>
+            ))}
+          </List>
+        </Section>
+      )}
+
+      {runs.length > 0 && (
+        <Section label={"Workflow runs · " + runs.length}>
           <List>
             {runs.map((x) => (
               <ListButton key={x.id} onClick={() => openObject("run", x.id)}>
@@ -270,9 +313,31 @@ function Related({ r, canEdit, related, tasks, requests, files, runs }: {
               </ListButton>
             ))}
           </List>
-        )}
-      </Section>
+        </Section>
+      )}
     </>
+  );
+}
+
+/* ── Files ─────────────────────────────────────────────────────────────── */
+
+function FilesTab({ files }: { files: FileDoc[] }) {
+  return (
+    <Section label={"Files · " + files.length}>
+      <List>
+        {files.map((f) => {
+          const v = [...f.versions].sort((a, b) => b.n - a.n)[0];
+          return (
+            <ListButton key={f.id} onClick={() => openObject("file", f.id)}>
+              <Grow>{f.title}</Grow>
+              <span className="rc-small" style={{ flex: "none" }}>{f.kind}{v ? ", v" + v.n + (v.approved ? " approved" : " not approved") : ""}</span>
+              {f.restrictedTo?.length ? <Chip tone="warn">Restricted</Chip> : null}
+            </ListButton>
+          );
+        })}
+      </List>
+      <div className="rc-small" style={{ marginTop: 6 }}>Open a file for its versions, owner, access and where each version was used.</div>
+    </Section>
   );
 }
 

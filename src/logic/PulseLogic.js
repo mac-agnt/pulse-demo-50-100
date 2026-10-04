@@ -32,19 +32,34 @@ import {
   hexRGB,
   buildGraph
 } from "./data";
-import { store, nowFor, registerNavigator, scopeLabel, answer, openObject, ops as coreOps } from "../core";
+import { store, nowFor, registerNavigator, scopeLabel, answer, openObject, visibleUpdates, ops as coreOps } from "../core";
 import { workCounts, waitingOnMe, attention } from "../ui/selectors";
+import { PAGES, GROUP_LABEL, visiblePages, sectionsFor, defaultSectionFor, pageLabel, pageDef } from "../core/modules";
 import { SETTINGS_SECTIONS, SETTINGS_GROUPS } from "../ui/settings/registry";
+import { pinnedPages, subscribePins } from "../ui/pins";
 
 /* ── Locked layout ──────────────────────────────────────────────────────────
-   These two rules hold for every client build, whatever data.js says:
-   1. Records always opens on Ontology, and Ontology is always the first tab.
-      If a customisation drops or renames it, the stock Ontology tab is put back.
-   2. Agents always sits directly under Home in the side rail.
+   These rules hold for every client build, whatever data.js says:
+   1. Agents always sits directly under Home in the side rail.
+   2. The Ontology graph is never deleted. In the 50-100 build it lives in
+      Records as the "Relationships" tab (illustrative), and Records opens on
+      Browse, as the V2 implementation brief requires. If a customisation drops
+      it from REC_SECTIONS, the stock entry is put back.
    Re-theme and re-label freely; don't remove these guards. */
 const ONTOLOGY_SECTION = {id:"ontology", label:"Ontology", blurb:"How every record connects: entities, predicates and the paths between them."};
-const REC_SECTIONS = [REC_SECTIONS_RAW.find(s => s.id === "ontology") || ONTOLOGY_SECTION]
-  .concat(REC_SECTIONS_RAW.filter(s => s.id !== "ontology"));
+const REC_SECTIONS = REC_SECTIONS_RAW.filter(s => s.id !== "ontology")
+  .concat([REC_SECTIONS_RAW.find(s => s.id === "ontology") || ONTOLOGY_SECTION]);
+void REC_SECTIONS;
+
+/* Old section ids still work, so saved links and notifications never dead-end. */
+const LEGACY_SECTION = {
+  Work: {tasks:"mine", schedules:"calendar"},
+  Records: {ontology:"relationships"},
+  Activity: {all:"history", people:"overview", ai:"overview", systems:"overview"},
+  Home: {}
+};
+/* Where each page keeps its current section in state. */
+const SECTION_KEY = {Work:"workSection", Records:"recSection", Activity:"actKpi", Dashboard:"dashArea", Home:"homeMode", Agents:"agentsSection"};
 const NAV = (() => {
   const items = NAV_RAW.filter(n => n.page !== "Home" && n.page !== "Agents");
   const home = NAV_RAW.find(n => n.page === "Home") || {label:"Home", icon:"helios", page:"Home"};
@@ -61,12 +76,12 @@ export default class PulseLogic extends DCLogic {
             workDoc:null, workDocTab:"work",
             queue:"mine", recordTab:"Overview", record:"person", hovered:null, hoverLabel:"", hoverHint:"", hoverTop:0,
             flags:{approvals:true, automations:true, insights:true, customEntities:false, whatsapp:true, composio:false},
-            workSection:"tasks", workViews:{}, addedTasks:[], newTask:"", newPriority:"Medium",
+            workSection:"mine", workViews:{}, modSections:{}, homeMode:null, agentsSection:"organisation", addedTasks:[], newTask:"", newPriority:"Medium",
             timerRunning:false, timerTask:null, timerPreset:null, scheduleOff:{},
             adminCard:null, adminFlags:{},
             adminOpen:null, adminFlags:{}, adminGroup:null,
-            actPaused:false, actHover:null, actKpi:"all", actQuery:"", actOpen:null, actTick:0,
-            recSection:"ontology", recAsk:"", treeOpen:true, treeExpanded:{}, treeFile:"fl-1", treeQuery:"",
+            actPaused:false, actHover:null, actKpi:"overview", actQuery:"", actOpen:null, actTick:0,
+            recSection:"browse", recAsk:"", treeOpen:true, treeExpanded:{}, treeFile:"fl-1", treeQuery:"",
             ontoNode:"Organisation", ontoHover:null, ontoLayout:"Force",
             newRecOpen:false, newRecName:"", newRecTemplate:"Field sheet", newRecCat:"All",
             opsFilter:"all", opsOff:{}, opsOpen:null, opsScope:"week", opsDay:26, opsOrder:null, opsDrag:null,
@@ -1088,25 +1103,88 @@ export default class PulseLogic extends DCLogic {
     const roles = snap.q.viewer.roles.map(r => r.roleId);
     const top = roles.indexOf("admin") > -1 ? "admin" : roles.indexOf("team_manager") > -1 ? "team_manager" : "contributor";
     const id = (snap.core.config.roleLayouts[top] || {}).dashboardId;
-    const list = snap.core.config.dashboards;
-    return list.some(d => d.id === id) ? id : (list[0] ? list[0].id : "overview");
+    // Only views still shown (a view whose module is off is hidden).
+    const list = sectionsFor(snap.core, "Dashboard").filter(d => d.id !== "reports");
+    return list.some(d => d.id === id) ? id : (list[0] ? list[0].id : "reports");
   }
 
   /* Pages built on the core ask for navigation through here (see src/core/nav.ts). */
   navTo(t){
-    const extra = {page:t.page, open:null, showNotifs:false, paletteOpen:false, miniOpen:false};
-    if (t.page === "Work" && t.section) extra.workSection = t.section;
-    if (t.page === "Records" && t.section) extra.recSection = t.section;
-    if (t.page === "Activity" && t.section) extra.actKpi = t.section;
-    if (t.page === "Settings" && t.section){ extra.adminOpen = t.section; extra.adminGroup = null; }
-    if (t.page === "Dashboard" && t.section) extra.dashArea = t.section;
+    let page = t.page, section = t.section;
+    // Work > People moved to its own module; keep the old link working.
+    if (page === "Work" && section === "people"){ page = "People"; section = "directory"; }
+    if (!pageDef(page)) page = "Home";
+    // A disabled or unpermitted module never opens from an old link; land on Home instead.
+    { const snap = store.get(); if (page !== "Settings" && !visiblePages(snap.core, snap.session.viewerId).some(p => p.id === page)) { page = "Home"; section = undefined; } }
+    const extra = {page, open:null, showNotifs:false, paletteOpen:false, miniOpen:false};
+    if (page === "Settings"){ if (section){ extra.adminOpen = section; extra.adminGroup = null; } }
+    else if (section) this.assignSection(extra, page, section);
     this.setState(extra);
-    if (t.page === "Dashboard") this.startKpiCount();
+    if (page === "Dashboard") this.startKpiCount();
+  }
+  /* Put a section into the state patch for a page, mapping legacy ids. */
+  assignSection(patch, page, id){
+    const legacy = (LEGACY_SECTION[page] || {})[id];
+    const sec = legacy || id;
+    const key = SECTION_KEY[page];
+    if (key) patch[key] = sec;
+    else patch.modSections = Object.assign({}, this.state.modSections, patch.modSections || {}, {[page]: sec});
+  }
+  /* The section showing on a page: saved choice if still valid, else the default. */
+  sectionOf(page){
+    const core = store.get().core;
+    const list = sectionsFor(core, page);
+    if (!list.length) return "";
+    const key = SECTION_KEY[page];
+    let cur = key ? this.state[key] : (this.state.modSections || {})[page];
+    if (cur) cur = (LEGACY_SECTION[page] || {})[cur] || cur;
+    if (page === "Dashboard" && !list.some(x => x.id === cur)) return this.defaultDashboard();
+    if (page === "Home" && !cur){
+      const snap = store.get();
+      const top = (snap.q.viewer.roles[0] || {}).roleId;
+      const pref = (() => { try { return localStorage.getItem("pulse.homeMode"); } catch (e) { return null; } })();
+      cur = pref || ((snap.core.config.roleLayouts[top] || {}).homeMode) || "chat";
+    }
+    return list.some(x => x.id === cur) ? cur : defaultSectionFor(core, page);
+  }
+  /* Tabs tighten their padding when space is short for how many there are. */
+  tabsTight(st, n){
+    const avail = st.w - (st.railOpen ? 252 : 68);
+    return (avail < 1000 && n >= 4) || (avail < 1400 && n >= 5);
+  }
+  /* Small counts on page tabs. Only where a number helps someone act. */
+  sectionCounts(page, q){
+    if (page === "Work"){
+      const wc = workCounts(q);
+      return {mine: wc.mine, approvals: wc.approvals, workflows: wc.workflows || undefined};
+    }
+    if (page === "Activity") return {attention: attention(q).length};
+    return {};
+  }
+  setSection(page, id){
+    const patch = {};
+    this.assignSection(patch, page, id);
+    if (page === "Home"){ try { localStorage.setItem("pulse.homeMode", id); } catch (e) {} }
+    if (page === "Work") patch.opsOpen = null;
+    this.setState(patch);
+    if (page === "Dashboard") this.startKpiCount();
   }
 
+  /* Direct links: #/Page/section. Read once on load, written on every page or section change. */
+  readHash(){
+    try {
+      const m = (window.location.hash || "").match(/^#\/([A-Za-z]+)(?:\/([\w-]+))?/);
+      if (m && pageDef(m[1])) this.navTo({page:m[1], section:m[2]});
+    } catch (e) {}
+  }
   componentDidMount(){
     this._unsubCore = store.subscribe(() => this.forceUpdate());
-    try { if (localStorage.getItem("pulse.pagesAsTabs") === "1") this.setState({pagesAsTabs:true}); } catch (e) {}
+    this._unsubPins = subscribePins(() => this.forceUpdate());
+    this.readHash();
+    this._onHash = () => this.readHash();
+    window.addEventListener("hashchange", this._onHash);
+    // Desktop shows page tabs by default; a person can switch to the page menu.
+    try { if (localStorage.getItem("pulse.pagesAsTabs") === "0") this.setState({pagesAsTabs:false}); } catch (e) {}
     registerNavigator((t) => this.navTo(t));
     requestAnimationFrame(() => this.syncRailThumb());
     setTimeout(() => this.syncRailThumb(), 700);
@@ -1127,7 +1205,7 @@ export default class PulseLogic extends DCLogic {
     let last = performance.now();
     this._frame = () => this.graphFrame();
     const loop = () => {
-      const onGraph = this.state.page === "Records" && this.state.recSection === "ontology";
+      const onGraph = this.state.page === "Records" && this.sectionOf("Records") === "relationships";
       if (onGraph){ this._raf = requestAnimationFrame(loop); this._frame(); }
       else { this._raf = null; this.canvas = null; }
     };
@@ -1139,7 +1217,7 @@ export default class PulseLogic extends DCLogic {
     // used to leave the loop permanently unscheduled, so restart when the
     // ontology is open and no frame has landed for a while.
     this._fallback = setInterval(() => {
-      if (this.state.page !== "Records" || this.state.recSection !== "ontology") return;
+      if (this.state.page !== "Records" || this.sectionOf("Records") !== "relationships") return;
       const stale = !this._beat || performance.now() - this._beat > 600;
       this._startLoop(stale);
     }, 250);
@@ -1168,7 +1246,7 @@ export default class PulseLogic extends DCLogic {
     };
     window.addEventListener("paste", this._paste);
   }
-  componentWillUnmount(){ if (this._unsubCore) this._unsubCore(); window.removeEventListener("paste", this._paste); window.removeEventListener("resize", this._resize); window.removeEventListener("keydown", this._key); clearInterval(this._t); clearInterval(this._clockTimer); clearInterval(this._flapBoot); cancelAnimationFrame(this._raf); clearInterval(this._fallback); clearInterval(this._kpiTimer); }
+  componentWillUnmount(){ if (this._unsubCore) this._unsubCore(); if (this._unsubPins) this._unsubPins(); window.removeEventListener("hashchange", this._onHash); window.removeEventListener("paste", this._paste); window.removeEventListener("resize", this._resize); window.removeEventListener("keydown", this._key); clearInterval(this._t); clearInterval(this._clockTimer); clearInterval(this._flapBoot); cancelAnimationFrame(this._raf); clearInterval(this._fallback); clearInterval(this._kpiTimer); }
 
   /* Answers come from the core: built from the records the viewer can see and
      labelled as sample responses, because no AI model is connected. */
@@ -1207,16 +1285,41 @@ export default class PulseLogic extends DCLogic {
     this.syncRailThumb();
     // A new page or section starts at the top, not where the previous one was scrolled.
     const st = this.state;
-    const key = [st.page, st.workSection, st.recSection, st.actKpi, st.dashArea, st.adminOpen].join("|");
+    const key = [st.page, st.workSection, st.recSection, st.actKpi, st.dashArea, st.adminOpen, st.homeMode, st.agentsSection, JSON.stringify(st.modSections)].join("|");
     if (this._viewKey !== key){
       this._viewKey = key;
+      try {
+        const sec = st.page === "Settings" ? (st.adminOpen || "") : this.sectionOf(st.page);
+        const h = "#/" + st.page + (sec ? "/" + sec : "");
+        if (window.location.hash !== h) window.history.replaceState(null, "", h);
+      } catch (e) {}
       const main = document.querySelector("[data-scroll-main]");
       if (main) main.scrollTop = 0;
     }
   }
 
+  /* Side rail: enabled, permitted pages only, grouped. Agents stays under Home (locked). */
+  navItems(){
+    const snap = store.get();
+    /* Business modules: only pinned ones sit in the rail (plus the one open now);
+       the rest stay reachable from the module switcher. See src/ui/pins.ts. */
+    const pinned = pinnedPages(snap.core, snap.session.viewerId);
+    const pages = visiblePages(snap.core, snap.session.viewerId).filter(p => p.id !== "Settings"
+      && (p.group !== "business" || pinned.includes(p.id) || p.id === this.state.page));
+    const home = pages.find(p => p.id === "Home"), agents = pages.find(p => p.id === "Agents");
+    const rest = pages.filter(p => p.id !== "Home" && p.id !== "Agents");
+    const ordered = [home, agents].filter(Boolean).concat(rest);
+    const out = [];
+    let group = null;
+    ordered.forEach((p, i) => {
+      if (i > 0 && p.group !== group) out.push({divider:true, groupLabel:GROUP_LABEL[p.group]});
+      group = p.group;
+      out.push({label:pageLabel(snap.core.config, p.id), icon:p.icon, page:p.id, dot: p.id === "Dashboard" || p.id === "Activity"});
+    });
+    return out;
+  }
   go(page){
-    const order = NAV.filter(n => !n.divider).map(n => n.page).concat(["Settings"]);
+    const order = this.navItems().filter(n => !n.divider).map(n => n.page).concat(["Settings"]);
     const from = order.indexOf(this.state.page), to = order.indexOf(page);
     if (from > -1 && to > -1 && from !== to) this.setState(p => ({navDir: to > from ? 1 : -1, navSeq:(p.navSeq || 0) + 1}));
     this.setState({page, open:null, showNotifs:false, filterMenuOpen:false});
@@ -1376,8 +1479,8 @@ export default class PulseLogic extends DCLogic {
         + "transform:translateX(" + (hov && !act ? "3px" : "0") + ");"
         + "transition:transform .5s cubic-bezier(.22,1.2,.36,1),font-weight .2s var(--ease)"
       : "display:none";
-    const nav = NAV.map((n, idx) => n.divider
-      ? {isDivider:true, isItem:false}
+    const nav = this.navItems().map((n, idx) => n.divider
+      ? {isDivider:true, isItem:false, groupLabel: railOpen ? n.groupLabel : ""}
       : {isItem:true, isDivider:false, label:n.label, hint: railOpen ? (n.hint || "") : "", d:ICONS[n.icon],
          dot: n.dot === true && attention(store.get().q).length > 0,
          dotStyle: "position:absolute;top:5px;" + (railOpen ? "left:30px" : "right:6px")
@@ -1399,9 +1502,9 @@ export default class PulseLogic extends DCLogic {
        Data quality, each shown only when its capability is enabled. */
     const core = store.get();
     const caps = core.core.config.capabilities;
-    const recSections = REC_SECTIONS.filter(s => s.id === "ontology"
-      || (s.id === "files" ? caps.files : s.id === "contacts" ? caps.contacts : s.id === "quality" ? caps.dataQuality : true));
-    const recSec = recSections.find(s => s.id === st.recSection) || recSections[0];
+    void caps;
+    const recSections = sectionsFor(core.core, "Records");
+    const recSec = recSections.find(s => s.id === this.sectionOf("Records")) || recSections[0] || {id:"browse", label:"Browse"};
     const ontoKind = {entity:["var(--accent)", INK], ledger:["var(--neutral)", BODY],
       module:["#9fd6f0", INK], predicate:["transparent", DIM]};
     const ontoSel = ONTO_NODES.find(n => n[0] === st.ontoNode) || ONTO_NODES[0];
@@ -1409,7 +1512,7 @@ export default class PulseLogic extends DCLogic {
     const recModel = {
       isContacts: page === "Records" && recSec.id === "contacts",
       isFiles: page === "Records" && recSec.id === "files",
-      isOntology: page === "Records" && recSec.id === "ontology",
+      isOntology: page === "Records" && recSec.id === "relationships",
       isBrowse: page === "Records" && recSec.id === "browse",
       isQuality: page === "Records" && recSec.id === "quality",
       section: recSec.id
@@ -1556,7 +1659,16 @@ export default class PulseLogic extends DCLogic {
       return {dot:LIME, text:"Decision waiting on you: " + (r ? r.ref + " " + r.title : "a request"), event:"approval.pending", meta: relWhen((stg && stg.startedAt) || a.submittedAt),
         open: () => { this.setState({showNotifs:false}); openObject("approval", a.id); }};
     }).concat(attention(coreSnap.q).map(i => ({dot: toneDot[i.tone] || AMBER, text: i.title + ": " + i.reason, event: i.kind, meta: relWhen(i.since),
-      open: () => { this.setState({showNotifs:false}); openObject(i.objectKind, i.id); }})));
+      open: () => { this.setState({showNotifs:false}); openObject(i.objectKind, i.id); }})))
+      /* Mentions in comments from the last week open the object the comment is on. */
+      .concat(coreSnap.core.data.comments.filter(c => c.mentions.includes(coreSnap.session.viewerId) && c.by !== coreSnap.session.viewerId
+        && Date.parse(coreSnap.ctx.now) - Date.parse(c.at) < 7 * 864e5 && c.at <= coreSnap.ctx.now).map(c => ({dot:LIME,
+        text: coreSnap.q.name(c.by) + " mentioned you: " + c.text.replace(/@[A-Z][a-z]+ [A-Z][a-z]+\s*/g, "").slice(0, 110), event:"comment.mention", meta: relWhen(c.at),
+        open: () => { this.setState({showNotifs:false}); openObject(c.objectType, c.objectId); }})))
+      /* Company updates published to this person in the last three days. */
+      .concat(visibleUpdates(coreSnap.core, coreSnap.session.viewerId).filter(u => u.state === "published" && u.publishedBy !== coreSnap.session.viewerId
+        && Date.parse(coreSnap.ctx.now) - Date.parse(u.publishedAt) < 3 * 864e5).map(u => ({dot:GREEN, text:"Company update: " + u.title, event:"update.published", meta: relWhen(u.publishedAt),
+        open: () => { this.setState({showNotifs:false}); this.navTo({page:"Activity", section:"overview"}); }})));
 
     const q = st.query.trim();
     const ql = q.toLowerCase();
@@ -1587,7 +1699,7 @@ export default class PulseLogic extends DCLogic {
       ]},
       /* Search reads through the query layer, so it only finds what the viewer may see. */
       {group:"Agents", scope:"Agents", items:coreSnap.core.config.agents.filter(a => a.enabled).map(a => ({title:a.name, meta:a.purpose, hint:"AGENT", glyph:"agent",
-        go: () => this.navTo({page:"Agents"})}))},
+        go: () => openObject("agent", a.id)}))},
       {group:"Work", scope:"Work", items:coreSnap.q.tasks({ignoreScope:true}).filter(t => coreSnap.q.isOpenTask(t)).map(t => ({title:t.title,
         meta:coreSnap.q.teamLabel(t.teamId) + " · " + coreSnap.q.name(t.assigneeId), hint:"TASK", glyph:"task",
         go: () => openObject("task", t.id)}))
@@ -1600,6 +1712,9 @@ export default class PulseLogic extends DCLogic {
         .concat(coreSnap.q.files({ignoreScope:true}).map(f => ({title:f.title, meta:"File · v" + f.versions.length, hint:"FILE", glyph:"page",
         go: () => openObject("file", f.id)})))},
       {group:"Pages", scope:"Pages", items:[
+        /* Every enabled, permitted page, with its configured label; disabled modules never appear. */
+        ...visiblePages(coreSnap.core, coreSnap.session.viewerId).filter(pg => pg.id !== "Settings").map(pg => ({title:pageLabel(coreSnap.core.config, pg.id), meta:"Page", hint:"PAGE", glyph:"page",
+          go: () => this.navTo({page:pg.id})})),
         {title:"Data quality", meta:"Records · issues to resolve", hint:"PAGE", glyph:"page", go: () => this.navTo({page:"Records", section:"quality"})},
         {title:"Needs attention", meta:"Activity · unresolved items", hint:"PAGE", glyph:"page", go: () => this.navTo({page:"Activity", section:"attention"})},
         {title:"Roles and permissions", meta:"Settings · organisation", hint:"CONFIG", glyph:"page", go: () => this.navTo({page:"Settings", section:"roles"})},
@@ -1692,15 +1807,15 @@ export default class PulseLogic extends DCLogic {
       ],
       Agents: [
         {title:"Agent controls", meta:"Purpose, scope and permitted actions", icon:ICONS.navAdmin, go: () => this.navTo({page:"Settings", section:"agents"})},
-        {title:"Agent activity", meta:"What agents did", icon:ICONS.agents, go: () => this.navTo({page:"Activity", section:"ai"})},
+        {title:"Agent runs", meta:"What agents are doing and did", icon:ICONS.agents, go: () => this.navTo({page:"Agents", section:"runs"})},
         {title:"Build an agent", meta:"Start from a blank brief", icon:ICONS.modules, go: () => this.setState({paletteOpen:false, query:"", page:"Agents", builderOpen:true, builderMode:"new"})},
         {title:"Needs attention", meta:"Unresolved items", icon:ICONS.health, go: () => this.navTo({page:"Activity", section:"attention"})}
       ],
       Activity: [
         {title:"Needs attention", meta:"Failures, overdue work and decisions", icon:ICONS.health, go: jump("Activity", {actKpi:"attention"})},
-        {title:"Agent events", meta:"Only what agents did", icon:ICONS.agents, go: jump("Activity", {actKpi:"ai"})},
-        {title:"People events", meta:"Only what people did", icon:ICONS.people, go: jump("Activity", {actKpi:"people"})},
-        {title:"Everything", meta:"Full audit trail", icon:ICONS.navActivity, go: jump("Activity", {actKpi:"all"})}
+        {title:"Overview", meta:"Stories, business changes and company updates", icon:ICONS.navActivity, go: jump("Activity", {actKpi:"overview"})},
+        {title:"Company updates and recaps", meta:"Activity · overview", icon:ICONS.agents, go: jump("Activity", {actKpi:"overview"})},
+        {title:"History", meta:"Full audit trail with export", icon:ICONS.navActivity, go: jump("Activity", {actKpi:"history"})}
       ],
       Settings: [
         {title:"Roles and permissions", meta:"Who can see and do what", icon:ICONS.navAdmin, go: () => this.navTo({page:"Settings", section:"roles"})},
@@ -1722,15 +1837,9 @@ export default class PulseLogic extends DCLogic {
       {title:"Browse records", count:"", icon:ICONS.records, go: () => this.navTo({page:"Records", section:"browse"})},
       {title:"Workflow runs", count:"", icon:ICONS.autos, go: () => this.navTo({page:"Work", section:"schedules"})}
     ];
-    const JUMPS = [
-      {title:"Home", icon:ICONS.navHome, go: jump("Home")},
-      {title:"Work", icon:ICONS.navWork, go: jump("Work")},
-      {title:"Records", icon:ICONS.navRecords, go: jump("Records")},
-      {title:"Dashboard", icon:ICONS.navDash, go: jump("Dashboard")},
-      {title:"Agents", icon:ICONS.navAgents, go: jump("Agents")},
-      {title:"Activity", icon:ICONS.navActivity, go: jump("Activity")},
-      {title:"Settings", icon:ICONS.navAdmin, go: jump("Settings")}
-    ];
+    /* Jump-to lists only enabled, permitted pages (module pages included), under their configured labels. */
+    const JUMPS = visiblePages(coreSnap.core, coreSnap.session.viewerId).map(pg => ({title:pageLabel(coreSnap.core.config, pg.id), icon:ICONS[pg.icon] || ICONS.navHome,
+      go: () => this.navTo({page:pg.id})}));
     const RECENT_WHEN = ["2 min", "18 min", "1 h", "yesterday"];
     const recentRaw = (st.palRecent || []).slice(0, 4);
 
@@ -1789,39 +1898,15 @@ export default class PulseLogic extends DCLogic {
         String(SETTINGS_SECTIONS.filter(c => c.group === grp).length)));
       contextHint = "SETTINGS · " + SETTINGS_SECTIONS.length + " AREAS";
       searchHint = "Search settings";
-    } else if (page === "Activity"){
-      const attn = attention(core.q).length;
-      contextNav = [["attention","Attention", String(attn)],["all","Everything"],["people","People"],["ai","Agents"]]
-        .map(k => seg(k[1], st.actKpi === k[0], () => this.setState({actKpi:k[0]}), k[2]));
-      contextHint = "ACTIVITY · " + scopeLabel(core.core, core.session.scope).toUpperCase();
-      searchHint = "Search the audit trail";
-    } else if (page === "Records"){
-      contextNav = recSections.map(s => seg(s.label, recSec.id === s.id,
-        () => this.setState({recSection:s.id})));
-      contextHint = "RECORDS · " + recSec.label.toUpperCase();
-      searchHint = recSec.id === "ontology" ? "Search the ontology" : "Search " + recSec.label.toLowerCase();
-    } else if (page === "Work"){
-      const wc = workCounts(core.q);
-      contextNav = WORK_SECTIONS.filter(s => s.id === "tasks" || caps[s.id] !== false).map(s => seg(s.label, st.workSection === s.id,
-        () => this.setState({workSection:s.id, opsOpen:null}), String(wc[s.id])));
-      const workSec = WORK_SECTIONS.find(s => s.id === st.workSection) || WORK_SECTIONS[0];
-      contextHint = "WORK · " + workSec.label.toUpperCase() + " · " + scopeLabel(core.core, core.session.scope).toUpperCase();
-      searchHint = "Search " + workSec.label.toLowerCase();
-    } else if (page === "Dashboard"){
-      // Dashboard pages are the configured dashboard views (Settings > Experience).
-      const dashIds = core.core.config.dashboards.map(d => d.id);
-      const curDash = dashIds.indexOf(st.dashArea) > -1 ? st.dashArea : this.defaultDashboard();
-      contextNav = core.core.config.dashboards.map(d => seg(d.label, curDash === d.id, () => { this.setState({dashArea:d.id}); this.startKpiCount(); }));
-      contextHint = "DASHBOARD · " + scopeLabel(core.core, core.session.scope).toUpperCase();
-      searchHint = "Search the dashboard";
-    } else if (page === "Home"){
-      contextNav = [seg("Chat", true, () => this.go("Home"))];
-      contextHint = (page === "Home" ? "HOME · " : "DASHBOARD · ") + scopeLabel(core.core, core.session.scope).toUpperCase();
-      searchHint = page === "Dashboard" ? "Search the dashboard" : "Search every record you can see";
-    } else if (page === "Agents"){
-      contextNav = [];
-      contextHint = "";
-      searchHint = "Search agents";
+    } else if (pageDef(page)){
+      /* Every other page: its sections from the shared registry (src/core/modules.ts). */
+      const cur = this.sectionOf(page);
+      const counts = this.sectionCounts(page, core.q);
+      const list = sectionsFor(core.core, page);
+      contextNav = list.map(x => seg(x.label, cur === x.id, () => this.setSection(page, x.id), counts[x.id] !== undefined ? String(counts[x.id]) : undefined));
+      const curSec = list.find(x => x.id === cur);
+      contextHint = pageLabel(core.core.config, page).toUpperCase() + (curSec ? " · " + curSec.label.toUpperCase() : "") + " · " + scopeLabel(core.core, core.session.scope).toUpperCase();
+      searchHint = page === "Home" ? "Search every record you can see" : "Search " + (curSec ? curSec.label.toLowerCase() : pageLabel(core.core.config, page).toLowerCase());
     } else {
       contextNav = [seg(page, true, () => {}), seg("Home", false, () => this.go("Home"))];
       contextHint = "CLIENT CONFIG";
@@ -1840,9 +1925,14 @@ export default class PulseLogic extends DCLogic {
       // Working pages use compact headers, so the large Records wash is off.
       showRecordsWash: false,
       recSectionId: recSec.id,
+      setRecSection: (id) => this.setSection("Records", id),
       appearance: appearanceModel,
-      workSectionId: st.workSection,
-      actLens: st.actKpi,
+      workSectionId: this.sectionOf("Work"),
+      setWorkSection: (id) => this.setSection("Work", id),
+      actLens: this.sectionOf("Activity"),
+      setActLens: (id) => this.setSection("Activity", id),
+      agentsSection: this.sectionOf("Agents"),
+      setAgentsSection: (id) => this.setSection("Agents", id),
       adminGroupSel: st.adminGroup,
       adminOpenId: st.adminOpen,
       setAdminOpen: (id) => this.setState({adminOpen:id}),
@@ -1868,7 +1958,7 @@ export default class PulseLogic extends DCLogic {
 
       /* header zones */
       isAgents: page === "Agents",
-      showPillNav: page !== "Agents",
+      showPillNav: true,
 
       /* home widgets */
       widgetEdit: st.widgetEdit,
@@ -2219,14 +2309,15 @@ export default class PulseLogic extends DCLogic {
       setArrowB: "position:absolute;left:50%;top:50%;margin:-7.5px 0 0 -7.5px;"
         + "transform:translateX(" + (st.setBtnHover ? "0" : "-22px") + ");opacity:" + (st.setBtnHover ? "1" : "0") + ";"
         + "transition:transform .45s cubic-bezier(.22,.9,.16,1) " + (st.setBtnHover ? ".08s" : "0s") + ",opacity .3s var(--ease) " + (st.setBtnHover ? ".08s" : "0s"),
-      showTeam: (st.w - (st.railOpen ? 252 : 68)) >= 1000 || contextNav.length <= 3,
+      showTeam: (st.w - (st.railOpen ? 252 : 68)) >= (contextNav.length >= 5 ? 1500 : 1000) || contextNav.length <= 3,
       showTheme: (st.w - (st.railOpen ? 252 : 68)) >= 820 || contextNav.length <= 3,
-      tabPad: (st.w - (st.railOpen ? 252 : 68)) >= 1100 ? "0 18px" : (st.w - (st.railOpen ? 252 : 68)) >= 1000 ? "0 12px" : "0 10px",
-      _tabs: (() => { const tight = (st.w - (st.railOpen ? 252 : 68)) < 1000 && contextNav.length >= 4;
+      tabPad: this.tabsTight(st, contextNav.length) ? (contextNav.length >= 6 ? "0 9px" : "0 11px")
+        : (st.w - (st.railOpen ? 252 : 68)) >= 1100 ? "0 18px" : (st.w - (st.railOpen ? 252 : 68)) >= 1000 ? "0 12px" : "0 10px",
+      _tabs: (() => { const tight = this.tabsTight(st, contextNav.length);
         contextNav.forEach(t => { t.showCount = !!t.count && !tight; }); return 0; })(),
-      tabsLoose: !((st.w - (st.railOpen ? 252 : 68)) < 1000 && contextNav.length >= 4),
-      tabsTight: (st.w - (st.railOpen ? 252 : 68)) < 1000 && contextNav.length >= 4,
-      tabActiveBg: ((st.w - (st.railOpen ? 252 : 68)) < 1000 && contextNav.length >= 4) ? "var(--surface-2)" : "none",
+      tabsLoose: !(this.tabsTight(st, contextNav.length)),
+      tabsTight: this.tabsTight(st, contextNav.length),
+      tabActiveBg: (this.tabsTight(st, contextNav.length)) ? "var(--surface-2)" : "none",
       searchWrapFlex: ((contextNav.length <= 3 && (st.w - (st.railOpen ? 252 : 68) - 12) >= 780) || (contextNav.length <= 5 && st.w >= 1600)) ? "1 1 auto" : "0 0 auto",
       barLabel: st.barOpen ? "Collapse the bar" : "Expand the bar",
       barChevronStyle: "transition:transform .3s var(--ease);transform:rotate(" + (st.barOpen ? "0deg" : "180deg") + ")",
@@ -2410,14 +2501,19 @@ export default class PulseLogic extends DCLogic {
       },
       isChat: page === "Home",
       page,
-      pagesAsTabs: !!st.pagesAsTabs,
+      section: this.sectionOf(page),
+      setSection: (id) => this.setSection(page, id),
+      isModulePage: !!(pageDef(page) && pageDef(page).module),
+      pagesAsTabs: st.pagesAsTabs !== false && st.w >= 900,
       togglePagesAsTabs: () => this.setState(p => {
-        const next = !p.pagesAsTabs;
+        const next = p.pagesAsTabs === false;
         try { localStorage.setItem("pulse.pagesAsTabs", next ? "1" : "0"); } catch (e) {}
         return {pagesAsTabs: next};
       }),
-      dashArea: (() => { const ids = store.get().core.config.dashboards.map(d => d.id); return ids.indexOf(st.dashArea) > -1 ? st.dashArea : this.defaultDashboard(); })(),
-      setDashArea: (id) => { this.setState({dashArea:id}); this.startKpiCount(); },
+      dashArea: this.sectionOf("Dashboard"),
+      setDashArea: (id) => this.setSection("Dashboard", id),
+      homeMode: this.sectionOf("Home"),
+      setHomeMode: (id) => this.setSection("Home", id),
       isWork: page === "Work",
       isSettings: page === "Settings",
       inboxCount: String(notificationFeed.length),

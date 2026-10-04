@@ -201,36 +201,6 @@ export function DocsPanel({ rows, onOpen }: { rows: PersonRow[]; onOpen: Open })
   );
 }
 
-/* ── Workload ───────────────────────────────────────────────────────────── */
-
-export function WorkloadPanel({ rows, onOpen }: { rows: PersonRow[]; onOpen: Open }) {
-  const items = [...rows].sort((a, b) => b.openTasks - a.openTasks || b.overdueTasks - a.overdueTasks).slice(0, 8);
-  const max = Math.max(1, ...items.map((r) => r.openTasks));
-  return (
-    <Panel title="Workload by person" meta="Open and overdue tasks next to contracted hours. Not a performance measure.">
-      {!items.length ? <PanelEmpty>No one in this view.</PanelEmpty> : (
-        <div className="pp-list">
-          {items.map((r) => (
-            <div key={r.person.id} className="pp-li">
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                <Who r={r} onOpen={onOpen} sub={r.e.hoursPerWeek + " h/wk contracted" + (r.awayNow ? ", away now" : "")} />
-              </div>
-              <div style={{ width: 132, flex: "none", textAlign: "right" }}>
-                <div style={{ fontSize: 12.5, color: "var(--body)", whiteSpace: "nowrap" }}>
-                  <span style={{ fontFamily: "var(--mono)" }}>{r.openTasks}</span> open
-                  {r.overdueTasks > 0 && <span style={{ color: "var(--bad)" }}>, <span style={{ fontFamily: "var(--mono)" }}>{r.overdueTasks}</span> overdue</span>}
-                </div>
-                {r.openTasks > 0 && <div className="pp-bar" style={{ width: Math.round((100 * r.openTasks) / max) + "%", marginLeft: "auto", background: "var(--neutral)" }} />}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {rows.length > items.length && <div className="pp-foot">Showing the 8 people with the most open tasks.</div>}
-    </Panel>
-  );
-}
-
 /* ── Access review ──────────────────────────────────────────────────────── */
 
 export function AccessPanel({ rows, onOpen }: { rows: PersonRow[]; onOpen: Open }) {

@@ -182,7 +182,15 @@ export const PERM_LABEL: Record<Permission, string> = {
   "export": "Export data",
   "audit.view": "View audit history",
   "agents.manage": "Manage agents",
-  "views.share": "Share saved views"
+  "views.share": "Share saved views",
+  "projects.manage": "Manage projects",
+  "finance.view": "View finance",
+  "finance.manage": "Manage budgets",
+  "purchasing.manage": "Manage purchasing",
+  "standards.review": "Review evidence",
+  "agents.run": "Start agent runs",
+  "updates.publish": "Publish company updates",
+  "comments.write": "Comment and mention"
 };
 export const PERMISSIONS = Object.keys(PERM_LABEL) as Permission[];
 

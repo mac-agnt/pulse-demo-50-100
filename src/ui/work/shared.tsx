@@ -2,18 +2,35 @@
    the query layer, so a name, date or status looks the same in every panel. */
 
 import { useState, type ReactNode } from "react";
-import { useCore, can, fmtDateTime, relative, ms, zonedTime } from "../../core";
+import { useCore, can, fmtDateTime, relative, ms, zonedTime, objectLabel } from "../../core";
 import type { AuditEvent, CoreState, FieldDef, FieldValue, Id, RequestFormDef, RequestItem, Schedule, Tone } from "../../core";
 import { Chip, PersonName, Icon, ICON, store } from "../kit";
 import type { Result } from "../../core/ops";
 import type { Ctx } from "../../core";
 import "../../styles/work.css";
 
-export type PanelKind = "task" | "approval" | "request" | "run" | "schedule" | "template" | "newTask" | "newRequest" | "newSchedule";
+export type PanelKind = "task" | "approval" | "request" | "run" | "schedule" | "template" | "newTask" | "newRequest" | "newSchedule" | "appointment" | "newAppointment";
 /** intent "decide" opens an approval with the decision box focused (Decline and Return need a reason).
     due prefills a new task's due date (YYYY-MM-DD). */
 export interface PanelState { kind: PanelKind; id?: string; intent?: "decide"; due?: string }
 export type OpenPanel = (p: PanelState | null) => void;
+
+/** Compact working-page header: mono eyebrow, a modest title, one primary action, optional extras on the right. */
+export function WorkHead({ eyebrow, title, info, primary, extra }: { eyebrow: string; title: string; info?: string; primary?: ReactNode; extra?: ReactNode }) {
+  return (
+    <div className="wk-head">
+      <div className="wk-head-main">
+        <div className="pf-eyebrow">{eyebrow}</div>
+        <div className="wk-head-row">
+          <h1 className="wk-head-t">{title}</h1>
+          {info && <span className="pf-info" title={info} aria-label={info} role="img">i</span>}
+        </div>
+      </div>
+      {extra}
+      {primary}
+    </div>
+  );
+}
 
 /** Timezone and clock for the current organisation. */
 export function useClock() {
@@ -183,7 +200,7 @@ export function useFieldText() {
         const t = ms(String(v).length === 10 ? String(v) + "T12:00:00Z" : String(v));
         return isFinite(t) ? new Intl.DateTimeFormat("en-GB", { timeZone: tz, day: "numeric", month: "short", year: "numeric" }).format(new Date(t)) : String(v);
       }
-      default: return String(v);
+      default: return (typeof v === "string" && objectLabel(core, v)) || String(v);
     }
   };
 }

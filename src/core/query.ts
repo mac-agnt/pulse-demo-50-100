@@ -4,11 +4,11 @@
 
 import {
   canSeeApproval, canSeeEvent, canSeeFile, canSeeIssue, canSeeRecord, canSeeRequest, canSeeRun, canSeeTask,
-  inScope, viewerOf, type Viewer
+  inScope, viewerOf, canSeeOwned, type Viewer
 } from "./access";
 import { allIssues } from "./quality";
 import { ms } from "./time";
-import type { Approval, CoreState, Ctx, DataIssue, FileDoc, Id, RecordItem, RequestItem, Task, WorkflowRun, AuditEvent, Person, Schedule } from "./types";
+import type { Visibility, Approval, CoreState, Ctx, DataIssue, FileDoc, Id, RecordItem, RequestItem, Task, WorkflowRun, AuditEvent, Person, Schedule } from "./types";
 
 export interface QueryOpts { ignoreScope?: boolean }
 
@@ -41,6 +41,10 @@ export interface Q {
   blockers(t: Task): Task[];
   timeline(recordId: Id): AuditEvent[];
   related(recordId: Id): { record: RecordItem; label: string; direction: "out" | "in" }[];
+  /** Scope test for module entities: same rule every built-in list uses. */
+  inScope(o: { teamId?: Id; unitId?: Id }, people: (Id | null | undefined)[], opt?: QueryOpts): boolean;
+  /** Visibility test for module entities owned by people/teams. */
+  canSee(o: { ownerIds: (Id | null | undefined)[]; teamId?: Id; unitId?: Id; visibility?: Visibility }): boolean;
 }
 
 const people = (...ids: (Id | null | undefined)[]) => ids.filter(Boolean) as Id[];
@@ -144,7 +148,9 @@ export function query(s: CoreState, ctx: Ctx): Q {
         if (other && !other.mergedInto) out.push({ record: other, label: rel.label, direction: rel.fromId === recordId ? "out" : "in" });
       }
       return out;
-    }
+    },
+    inScope: (o, who, opt) => scoped(o, people(...who), opt),
+    canSee: (o) => canSeeOwned(s, viewer, { ownerIds: people(...o.ownerIds), teamId: o.teamId, unitId: o.unitId, visibility: o.visibility || "team" })
   };
   return q;
 }
@@ -156,4 +162,29 @@ export function toCsv(cols: { key: string; label: string }[], rows: Record<strin
     return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
   };
   return [cols.map((c) => esc(c.label)).join(","), ...rows.map((r) => cols.map((c) => esc(r[c.key])).join(","))].join("\n");
+}
+
+/** A readable name for an object id stored in a plain text field (module request forms keep
+    ids such as invoiceId or milestoneId). Null when the id is not a known object. */
+export function objectLabel(s: CoreState, id: string): string | null {
+  const d = s.data;
+  const inv = d.invoices.find((x) => x.id === id);
+  if (inv) return inv.ref + ", " + (d.suppliers.find((x) => x.id === inv.supplierId)?.name || "supplier");
+  const po = d.orders.find((x) => x.id === id);
+  if (po) return po.ref;
+  const pr = d.projects.find((x) => x.id === id);
+  if (pr) return pr.title;
+  const ms = d.milestones.find((x) => x.id === id);
+  if (ms) return ms.label + " (" + (d.projects.find((x) => x.id === ms.projectId)?.title || "project") + ")";
+  const ob = d.obligations.find((x) => x.id === id);
+  if (ob) return s.config.standards.requirements.find((r) => r.id === ob.requirementId)?.label || "Requirement";
+  const run = d.agentRuns.find((x) => x.id === id);
+  if (run) return run.ref + ": " + run.goal;
+  const sup = d.suppliers.find((x) => x.id === id);
+  if (sup) return sup.name;
+  const bg = d.budgets.find((x) => x.id === id);
+  if (bg) return bg.label;
+  const rq = d.requests.find((x) => x.id === id);
+  if (rq) return rq.ref + " " + rq.title;
+  return null;
 }

@@ -1,18 +1,20 @@
-/* Work > Approvals in the original design: hero with the stat strip, view
-   tabs and filter chips, then one card per request with its stage chips and
-   View / Approve / Decline. Approve and Decline only show when the viewer has
-   decision authority now; Decline needs a reason, so it opens the approval
-   with the decision box focused. Decided cards show the execution state. */
+/* Work > Approvals: a compact header, view tabs with counts and filter chips,
+   then one card per request with its stage chips and View / Approve /
+   Decline. Approve and Decline only show when the viewer has decision
+   authority now; Decline needs a reason, so it opens the approval with the
+   decision box focused. Decided cards show the execution state separately.
+   Every request, including module forms (purchase, invoice review, evidence
+   review, agent action, milestone change), is the same canonical object. */
 
 import { useState } from "react";
 import { useCore, ops, scopeLabel, ms, localDay } from "../../core";
 import type { Approval, ApprovalStage, RequestItem, Tone } from "../../core";
-import { Hero, StatStrip, SegTabs, FilterChip, eyebrowOf, toneColor, toneSoft } from "../frame";
+import { SegTabs, FilterChip, Btn, eyebrowOf, toneColor, toneSoft } from "../frame";
 import { LABEL } from "../kit";
 import { currentStage, waitingOnMe } from "../selectors";
-import { ageText, formOf, Ico, shortWhen, useClock, useRunner, useViewer, WI, type OpenPanel } from "./shared";
+import { ageText, formOf, Ico, isAgent, shortWhen, useClock, useRunner, useViewer, WI, WorkHead, type OpenPanel } from "./shared";
 
-type Lane = "mine" | "others" | "returned" | "decided" | "requests";
+type Lane = "mine" | "others" | "returned" | "decided";
 interface Row { req: RequestItem; a?: Approval }
 
 export default function ApprovalsView({ openPanel, selected }: { openPanel: OpenPanel; selected?: string | null }) {
@@ -36,18 +38,10 @@ export default function ApprovalsView({ openPanel, selected }: { openPanel: Open
     mine: mine.map((a) => ({ req: reqOf(a), a })),
     others: inScope.filter((a) => (a.status === "pending" || a.status === "stale") && !mineIds.has(a.id)).map((a) => ({ req: reqOf(a), a })),
     returned: inScope.filter((a) => a.status === "returned").map((a) => ({ req: reqOf(a), a })),
-    decided: inScope.filter((a) => a.status === "approved" || a.status === "declined").map((a) => ({ req: reqOf(a), a })),
-    requests: q.requests({ ignoreScope: true }).filter((r) => r.requesterId === me).map((r) => ({ req: r, a: r.approvalId ? q.approval(r.approvalId) : undefined }))
+    decided: inScope.filter((a) => a.status === "approved" || a.status === "declined").map((a) => ({ req: reqOf(a), a }))
   };
   const decidedThisMonth = lanes.decided.filter((r) => r.a?.decidedAt && localDay(r.a.decidedAt, tz).slice(0, 7) === month).length;
 
-  const pick = (l: Lane) => { setLane(l); };
-  const stats = [
-    { label: "AWAITING YOU", value: String(lanes.mine.length), icon: WI.list, color: lanes.mine.length ? "var(--warn)" : undefined, onClick: () => pick("mine"), title: "Decisions that sit with you" },
-    { label: "AWAITING OTHERS", value: String(lanes.others.length), icon: WI.cal, onClick: () => pick("others"), title: "In review with someone else" },
-    { label: "RETURNED", value: String(lanes.returned.length), icon: WI.alert, onClick: () => pick("returned"), title: "Sent back for changes" },
-    { label: "DECIDED THIS MONTH", value: String(decidedThisMonth), icon: WI.done, onClick: () => pick("decided"), title: "Approved or declined this calendar month" }
-  ];
 
   const at = (r: Row) => r.a?.submittedAt || r.req.createdAt;
   const base = lanes[lane];
@@ -68,8 +62,7 @@ export default function ApprovalsView({ openPanel, selected }: { openPanel: Open
     { value: "mine", label: "Awaiting you", count: lanes.mine.length },
     { value: "others", label: "Awaiting others", count: lanes.others.length },
     { value: "returned", label: "Returned", count: lanes.returned.length },
-    { value: "decided", label: "Decided", count: lanes.decided.length },
-    { value: "requests", label: "My requests", count: lanes.requests.length }
+    { value: "decided", label: "Decided", count: lanes.decided.length }
   ];
 
   const formsReady = core.config.requestForms.some((x) => x.enabled);
@@ -77,16 +70,14 @@ export default function ApprovalsView({ openPanel, selected }: { openPanel: Open
     mine: ["Nothing waiting on you", "Requests appear here with every step and who it sits with, including decisions delegated to you."],
     others: ["Nothing else in review in " + scopeName, "Requests with someone else appear here. Try a wider scope from the top bar."],
     returned: ["Nothing returned in " + scopeName, "Requests sent back for changes appear here until they are resubmitted."],
-    decided: ["No decided requests in " + scopeName, "Approved and declined requests appear here with whether the approved action has run."],
-    requests: ["You have not raised any requests", formsReady ? "Use the add button to raise one." : "No request forms are set up yet."]
+    decided: ["No decided requests in " + scopeName, "Approved and declined requests appear here with whether the approved action has run."]
   };
 
   return (
     <>
-      <Hero infoOnly eyebrow={eyebrowOf("Work", "Approvals", scopeName)} title="Approvals"
-        blurb="Requests and their steps. Every decision is recorded as the person who made it.">
-        <StatStrip stats={stats} onAdd={formsReady ? () => openPanel({ kind: "newRequest" }) : undefined} addLabel="New request" />
-      </Hero>
+      <WorkHead eyebrow={eyebrowOf("Work", "Approvals", scopeName, decidedThisMonth + " decided this month")} title="Approvals"
+        info="Decisions and their stages. Every decision is recorded as the person who made it; running the approved action is a separate step."
+        primary={<Btn primary disabled={!formsReady} title={formsReady ? undefined : "No request forms are configured yet."} onClick={() => openPanel({ kind: "newRequest" })}><Ico d={WI.plus} size={14} sw={2.1} />New request</Btn>} />
 
       <div className="wk-viewbar">
         <SegTabs label="Approval view" options={tabs} value={lane} onChange={setLane} />
@@ -97,10 +88,8 @@ export default function ApprovalsView({ openPanel, selected }: { openPanel: Open
           <FilterChip label="Form" value={form} onChange={setForm}
             options={[{ value: "", label: "Any form" }, ...forms.map((id) => ({ value: id, label: core.config.requestForms.find((x) => x.id === id)?.label || "Unknown form" }))]} />
         )}
-        {lane !== "requests" && (
-          <FilterChip label="Raised by" value={who} onChange={setWho}
-            options={[{ value: "", label: "Anyone" }, ...requesters.map((id) => ({ value: id, label: q.name(id) }))]} />
-        )}
+        <FilterChip label="Raised by" value={who} onChange={setWho}
+          options={[{ value: "", label: "Anyone" }, ...requesters.map((id) => ({ value: id, label: q.name(id) }))]} />
         {teams.length > 1 && (
           <FilterChip label="Team" value={team} onChange={setTeam}
             options={[{ value: "", label: "Any team" }, ...teams.map((id) => ({ value: id, label: q.teamLabel(id || undefined) }))]} />

@@ -13,7 +13,7 @@ export default function DashboardKpiBand({ v }: Props) {
   const { core } = useCore();
   const area = areaOf(core, v.dashArea);
   return (
-    <KpiBand area={area ? area.label : "Dashboard"} backdropColor={v.kpiBackdrop}
+    <KpiBand area={v.dashArea === "reports" ? "Reports" : area ? area.label : "Dashboard"} backdropColor={v.kpiBackdrop}
       backdrop={v.kpiBackdropOn ? <KpiBackdrop v={v} still={still} /> : null} />
   );
 }

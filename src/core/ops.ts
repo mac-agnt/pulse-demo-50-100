@@ -8,12 +8,34 @@ import { allIssues, isEmpty } from "./quality";
 import { addBusinessHours, localDay, ms, nextOccurrence, addHours } from "./time";
 import type {
   Approval, ApprovalStage, AuditEvent, CoreState, Ctx, DataIssue, FieldDef, FieldValue, Id, Priority,
-  RecordItem, RequestItem, SavedView, Schedule, Task, TaskStatus, WorkflowRun, OrgConfig, Person, RoleScope
+  RecordItem, RequestItem, SavedView, Schedule, Task, TaskStatus, WorkflowRun, OrgConfig, Person, RoleScope, EffectKind
 } from "./types";
 
 export type Result = { ok: true; state: CoreState; message: string; id?: Id } | { ok: false; error: string };
 
 const fail = (error: string): Result => ({ ok: false, error });
+
+/* ── Module hooks ──────────────────────────────────────────────────────────
+   Capability modules (projects, purchasing, standards, agents) plug their
+   approved-action effects and decision follow-ups into the one shared
+   approval model here, instead of keeping their own approval flows. A
+   handler mutates the draft state it is given and reports what happened. */
+
+export type EffectOutcome = { ok: true; effect: string } | { ok: false; error: string };
+export type EffectHandler = (s: CoreState, ctx: Ctx, r: RequestItem) => EffectOutcome;
+export type DecisionHook = (s: CoreState, ctx: Ctx, r: RequestItem, a: Approval, kind: "approve" | "decline" | "return", final: boolean) => void;
+
+const effectHandlers: Partial<Record<EffectKind, EffectHandler>> = {};
+const decisionHooks: DecisionHook[] = [];
+
+export function registerEffect(kind: EffectKind, h: EffectHandler) { effectHandlers[kind] = h; }
+export function registerDecisionHook(h: DecisionHook) { if (!decisionHooks.includes(h)) decisionHooks.push(h); }
+
+/* A module can add a condition a decider must meet (e.g. evidence reviews need
+   standards.review). Checked inside decisionAuthority, so every decision path rechecks it. */
+export type DecisionGuard = (s: CoreState, ctx: Ctx, r: RequestItem, a: Approval) => string | null;
+const decisionGuards: DecisionGuard[] = [];
+export function registerDecisionGuard(g: DecisionGuard) { if (!decisionGuards.includes(g)) decisionGuards.push(g); }
 
 function begin(s: CoreState) {
   return structuredClone(s);
@@ -226,6 +248,8 @@ export function submitRequest(s0: CoreState, ctx: Ctx, requestId: Id): Result {
 
 /** Can this person decide the current stage, and on whose behalf? Checked at decision time. */
 export function decisionAuthority(s: CoreState, ctx: Ctx, a: Approval): { ok: true; onBehalfOf?: Id } | { ok: false; reason: string } {
+  // Only people decide. An agent (or any id that is not a person) never approves, including its own proposed action.
+  if (!s.data.people.some((p) => p.id === ctx.viewerId)) return { ok: false, reason: "Only a person can decide an approval. Agents never approve." };
   const v = viewerOf(s, ctx.viewerId);
   const req = s.data.requests.find((r) => r.id === a.requestId)!;
   const rule = s.config.approvalRules.find((r) => r.id === a.ruleId);
@@ -233,6 +257,7 @@ export function decisionAuthority(s: CoreState, ctx: Ctx, a: Approval): { ok: tr
   if (a.status !== "pending" || !stage) return { ok: false, reason: "Nothing is waiting for a decision." };
   if (v.person.status !== "active") return { ok: false, reason: "Your account is not active." };
   if (rule?.prohibitSelfApproval && req.requesterId === v.person.id) return { ok: false, reason: "You raised this request, so you cannot approve it." };
+  for (const g of decisionGuards) { const why = g(s, ctx, req, a); if (why) return { ok: false, reason: why }; }
   if (stage.assigneeId === v.person.id) {
     if (!can(v, "approvals.decide")) return { ok: false, reason: "Your role no longer allows approval decisions." };
     const still = eligibleApprovers(s, stage.eligibleRoles, rule?.stages.find((x) => x.id === stage.stageId)?.scope || "organisation", req.teamId);
@@ -290,6 +315,7 @@ export function decide(s0: CoreState, ctx: Ctx, approvalId: Id, kind: "approve" 
     message = "Returned for changes. It comes back to you when resubmitted.";
   }
   r.updatedAt = ctx.now;
+  for (const h of decisionHooks) h(s, ctx, r, a, kind, a.status !== "pending");
   syncRun(s, ctx, r);
   log(s, ctx, { action: "approval." + kind, objectType: "approval", objectId: a.id, recordIds: r.linkedRecordIds, teamId: r.teamId, unitId: r.unitId,
     onBehalfOfId: auth.onBehalfOf,
@@ -442,7 +468,7 @@ export function executeRequest(s0: CoreState, ctx: Ctx, requestId: Id): Result {
     r.execution.effect = effect;
     r.execution.lastError = undefined;
     r.execution.appliedKeys.push(key);
-    message = "Done: " + effect + ".";
+    message = "Done: " + effect.replace(/[.\s]+$/, "") + ".";
   };
   switch (form.effect.kind) {
     case "apply-correction": {
@@ -488,6 +514,14 @@ export function executeRequest(s0: CoreState, ctx: Ctx, requestId: Id): Result {
       s.data.leave.push({ id, personId: r.requesterId, kind: (String(r.fields.kind || "other") as "annual"), from: new Date(String(r.fields.from) + "T09:00:00Z").toISOString(),
         to: new Date(String(r.fields.to) + "T17:00:00Z").toISOString(), status: "approved", requestId: r.id });
       ok("Leave added for " + nameOf(s, r.requesterId) + " from " + r.fields.from + " to " + r.fields.to);
+      break;
+    }
+    default: {
+      const h = effectHandlers[form.effect.kind];
+      if (!h) { r.execution.status = "failed"; r.execution.lastError = "No handler is set up for this action."; message = r.execution.lastError; break; }
+      const out = h(s, ctx, r);
+      if (out.ok) ok(out.effect);
+      else { r.execution.status = "failed"; r.execution.lastError = out.error; message = out.error; }
       break;
     }
     case "notify-external": {
@@ -1280,6 +1314,24 @@ export function revokeDelegation(s0: CoreState, ctx: Ctx, id: Id): Result {
 }
 
 /** For page-level operations built outside this file: clone, then log against the clone. */
+/* ── Comments and mentions ──────────────────────────────────────────────── */
+
+export function addComment(s0: CoreState, ctx: Ctx, objectType: import("./types").Comment["objectType"], objectId: Id, text: string): Result {
+  const v = viewerOf(s0, ctx.viewerId);
+  if (!can(v, "comments.write")) return fail("Your role cannot comment.");
+  const body = text.trim();
+  if (!body) return fail("Write something first.");
+  if (body.length > 2000) return fail("Keep comments under 2,000 characters.");
+  const s = begin(s0);
+  /* @First Last mentions resolve to people by name. Unknown names stay as text. */
+  const mentions = s.data.people.filter((p) => body.includes("@" + p.name)).map((p) => p.id);
+  const id = nid(s, "cm");
+  s.data.comments.push({ id, objectType, objectId, by: ctx.viewerId, at: ctx.now, text: body, mentions });
+  log(s, ctx, { action: "comment.added", objectType: "comment", objectId: id, recordIds: objectType === "record" ? [objectId] : [],
+    summary: "Commented on " + objectType + (mentions.length ? ", mentioning " + mentions.map((m) => nameOf(s, m)).join(", ") : ""), storyKey: objectType + ":" + objectId });
+  return { ok: true, state: s, message: "Comment added" + (mentions.length ? ". Mentioned people see it in their notifications." : "."), id };
+}
+
 export const draft = begin;
 export const logEvent = log;
 export const _test = { resolveStages, viewerOf };

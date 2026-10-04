@@ -50,6 +50,11 @@ export const can = (v: Viewer, p: Permission) => v.permissions.has(p);
 
 const unitOfTeam = (s: CoreState, teamId?: Id) => s.config.teams.find((t) => t.id === teamId)?.unitId;
 
+/** Visibility for module entities (projects, budgets, orders, obligations, agent runs). */
+export function canSeeOwned(s: CoreState, v: Viewer, o: { ownerIds: Id[]; teamId?: Id; unitId?: Id; visibility: Visibility }): boolean {
+  return visible(s, v, o);
+}
+
 /** Base visibility of an owned, team- and unit-tagged object. */
 function visible(s: CoreState, v: Viewer, o: { ownerIds: Id[]; teamId?: Id; unitId?: Id; visibility: Visibility }): boolean {
   if (v.isOrgWide) return true;
@@ -119,6 +124,13 @@ export function canSeeEvent(s: CoreState, v: Viewer, e: AuditEvent) {
     if (r && !canSeeRecord(s, v, r)) return false;
   }
   if (e.teamId) return v.overseenTeamIds.includes(e.teamId) || v.memberTeamIds.includes(e.teamId);
+  // Project stories follow the project's own visibility (owner, team, unit, organisation-wide projects).
+  const projectId = e.objectType === "project" ? e.objectId : e.storyKey?.startsWith("project:") ? e.storyKey.slice(8) : null;
+  const pr = projectId ? s.data.projects.find((x) => x.id === projectId) : undefined;
+  if (pr) return visible(s, v, { ownerIds: [pr.ownerId], teamId: pr.teamId, unitId: pr.unitId, visibility: pr.visibility });
+  // Unit-level events: people who oversee the unit or belong to one of its teams.
+  if (e.unitId) return v.overseenUnitIds.includes(e.unitId)
+    || v.memberTeamIds.some((t) => s.config.teams.find((x) => x.id === t)?.unitId === e.unitId);
   // Organisation-level changes (settings, sources) stay with org-wide viewers.
   return e.recordIds.length > 0;
 }

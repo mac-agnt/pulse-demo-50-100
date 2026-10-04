@@ -3,7 +3,7 @@
    focus hand-off and small list helpers. */
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useCore, store, ops, can, isEmpty, relative, fmtDateTime, type Focus } from "../../core";
+import { useCore, store, ops, can, isEmpty, relative, fmtDateTime, openObject, type Focus } from "../../core";
 import type {
   ActorKind, CoreState, DataIssue, FieldDef, FieldMeta, FieldValue, Id, RecordItem, RecordTypeDef, Tone, Viewer
 } from "../../core";
@@ -234,4 +234,38 @@ export function RecordRef({ id }: { id: Id }) {
   const { q } = useCore();
   const r = q.record(id);
   return <>{r ? r.ref : "Not available"}</>;
+}
+
+/* ── Where a file version is used beyond requests and tasks ────────────── */
+
+export interface FileUse { key: string; label: string; sub: string; open: () => void }
+
+/** Evidence on requirements, agent runs that read or produced the file, supplier invoices and receipts.
+    Each names the exact version it refers to where that is recorded. */
+export function fileUses(core: CoreState, q: Q, fileId: Id): FileUse[] {
+  const out: FileUse[] = [];
+  for (const o of core.data.obligations || []) {
+    if (o.evidence?.fileId !== fileId) continue;
+    const req = core.config.standards.requirements.find((r) => r.id === o.requirementId);
+    out.push({ key: "ob:" + o.id, label: (req?.label || o.requirementId) + " evidence", sub: "Version " + o.evidence.version + " received, " + o.state.replace("_", " "),
+      open: () => openObject("obligation", o.id) });
+  }
+  for (const r of core.data.agentRuns || []) {
+    const read = r.steps.some((st) => st.sourceRefs.some((x) => x.kind === "file" && x.id === fileId));
+    const made = r.outputs.some((o) => o.id === fileId);
+    if (!read && !made) continue;
+    const agent = core.config.agents.find((a) => a.id === r.agentId);
+    out.push({ key: "run:" + r.id, label: r.ref + " " + r.goal, sub: (made ? "Output of " : "Read by ") + (agent?.name || "an agent") + (r.simulated ? ", sample run" : ""),
+      open: () => openObject("agentRun", r.id) });
+  }
+  for (const i of core.data.invoices || []) {
+    if (i.fileId !== fileId) continue;
+    out.push({ key: "inv:" + i.id, label: "Invoice " + i.ref, sub: "Supplier invoice document, " + i.status.replace("_", " "), open: () => openObject("invoice", i.id) });
+  }
+  for (const g of core.data.receipts || []) {
+    if (g.fileId !== fileId) continue;
+    const po = core.data.orders.find((o) => o.id === g.orderId);
+    out.push({ key: "gr:" + g.id, label: "Receipt for " + (po?.ref || "an order"), sub: "Goods or service receipt, " + q.name(g.by), open: () => (po ? openObject("order", po.id) : undefined) });
+  }
+  return out;
 }

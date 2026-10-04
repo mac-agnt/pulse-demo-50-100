@@ -17,6 +17,9 @@ export function cleanState(): CoreState {
       roleAssignments: [{ id: "ra-you", personId: "p-you", roleId: "admin", scope: { kind: "organisation" } }],
       delegations: [], records: [], relationships: [], files: [], tasks: [], requests: [], approvals: [],
       runs: [], schedules: [], issues: [], events: [], views: [], reportSchedules: [],
+      projects: [], milestones: [], risks: [], projectUpdates: [], comments: [], companyUpdates: [], appointments: [],
+      budgets: [], receivables: [], transactions: [], suppliers: [], orders: [], receipts: [], invoices: [],
+      obligations: [], checkRuns: [], policyAcks: [], agentRuns: [],
       sync: [{ sourceId: "pulse", lastAttemptAt: null, lastSuccessAt: null, status: "ok", message: "Entered in Pulse" }]
     }
   };

@@ -5,14 +5,25 @@
    state or permissions. */
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { query, formatMetric, type CoreState, type Ctx, type DashboardDef, type MetricDef, type MetricResult, type Q, computeMetric } from "../../core";
+import { query, formatMetric, metricAvailable, dashboardVisible, useCore, type CoreState, type Ctx, type DashboardDef, type MetricDef, type MetricResult, type Q, type ScopeSel, computeMetric } from "../../core";
+
+export type CompareCol = "actual" | "target" | "variance" | "trend" | "owner" | "updated";
+export const COMPARE_COLS: CompareCol[] = ["actual", "target", "variance", "trend", "owner", "updated"];
 
 interface DashState {
   /** Metric panel open in the band or page. */
   metricId: string | null;
+  /** Scope the open metric is explained for (a comparison row); null means the selected scope. */
+  metricScope: ScopeSel | null;
+  /** Reporting period in days for period measures; null keeps each measure's configured period. */
+  period: number | null;
+  /** Comparison table: the measure compared, visible columns and sort. Saved views store these. */
+  compareMetric: string | null;
+  columns: CompareCol[];
+  sort: { key: CompareCol | "row"; dir: "asc" | "desc" } | null;
 }
 
-let state: DashState = { metricId: null };
+let state: DashState = { metricId: null, metricScope: null, period: null, compareMetric: null, columns: [...COMPARE_COLS], sort: null };
 const listeners = new Set<() => void>();
 
 export const dashStore = {
@@ -42,15 +53,40 @@ export function highestRoleId(core: CoreState, q: Q): string {
   return best?.id || "contributor";
 }
 
-/** The area shown: the one the shell asked for, else the first configured. */
+/** The area shown: the one the shell asked for, else the first visible one. Views whose
+    metrics all belong to a disabled module are not shown. */
 export function areaOf(core: CoreState, id: string | undefined): DashboardDef | null {
-  const list = core.config.dashboards;
+  const list = core.config.dashboards.filter((d) => dashboardVisible(core.config, d));
   return list.find((d) => d.id === id) || list[0] || null;
 }
 
-/** Enabled metric definitions of an area, in configured order. */
+/** Enabled metric definitions of an area whose module is on, in configured order. */
 export function viewMetrics(core: CoreState, metricIds: string[]): MetricDef[] {
-  return metricIds.map((id) => core.config.metrics.find((m) => m.id === id)).filter((m): m is MetricDef => !!m && m.enabled);
+  return metricIds.map((id) => core.config.metrics.find((m) => m.id === id)).filter((m): m is MetricDef => !!m && metricAvailable(core.config, m));
+}
+
+/* ── Reporting period ──────────────────────────────────────────────────── */
+
+const periodCache = new WeakMap<CoreState, Map<number, CoreState>>();
+
+/** The same state with every period measure computed over `days`. Snapshot measures are unchanged. */
+export function withPeriod(core: CoreState, days: number | null): CoreState {
+  if (!days) return core;
+  let m = periodCache.get(core);
+  if (!m) { m = new Map(); periodCache.set(core, m); }
+  let out = m.get(days);
+  if (!out) {
+    out = { ...core, config: { ...core.config, metrics: core.config.metrics.map((x) => (x.periodDays > 0 ? { ...x, periodDays: days } : x)) } };
+    m.set(days, out);
+  }
+  return out;
+}
+
+/** Core state with the dashboard's chosen period applied, for the band, page and metric panel. */
+export function useDashCore() {
+  const snap = useCore();
+  const { period } = useDashState();
+  return { ...snap, core: withPeriod(snap.core, period) };
 }
 
 /** Who answers for an area: the first active organisation-wide administrator. Null when none is set up. */
@@ -69,7 +105,11 @@ export const CORE_MAX = 6;
 const keyOf = (core: CoreState) => "pulse.coreKpis." + core.config.workspace.id;
 
 export function defaultCoreKpis(core: CoreState): string[] {
-  return core.config.metrics.filter((m) => m.enabled).slice(0, 5).map((m) => m.id);
+  /* The first visible area's measures first, so the band matches the default view. */
+  const first = areaOf(core, undefined);
+  const avail = core.config.metrics.filter((m) => metricAvailable(core.config, m)).map((m) => m.id);
+  const ordered = [...(first?.metricIds || []).filter((id) => avail.includes(id)), ...avail.filter((id) => !first?.metricIds.includes(id))];
+  return ordered.slice(0, 5);
 }
 
 function readCore(core: CoreState): string[] | null {
@@ -88,7 +128,7 @@ export function useCoreKpis(core: CoreState): { ids: string[]; set: (ids: string
   const key = keyOf(core);
   const [stored, setStored] = useState<string[] | null>(() => readCore(core));
   useEffect(() => { setStored(readCore(core)); }, [key]);
-  const enabled = new Set(core.config.metrics.filter((m) => m.enabled).map((m) => m.id));
+  const enabled = new Set(core.config.metrics.filter((m) => metricAvailable(core.config, m)).map((m) => m.id));
   const valid = (stored || []).filter((id) => enabled.has(id)).slice(0, CORE_MAX);
   const ids = valid.length ? valid : defaultCoreKpis(core);
   const set = (next: string[]) => {
@@ -110,7 +150,11 @@ const ENTITY_WORD: Record<MetricDef["entity"], { plural: string; where: string }
   record: { plural: "records", where: "Records appear once they are added or a source is connected." },
   issue: { plural: "records", where: "Data issues are found once records exist." },
   request: { plural: "requests", where: "Requests appear once they are submitted in Work." },
-  person: { plural: "people", where: "People appear once employment details are added in Work, People." }
+  person: { plural: "people", where: "People appear once employment details are added in People." },
+  project: { plural: "projects", where: "Projects appear once one is created in Projects." },
+  invoice: { plural: "invoices", where: "Invoices appear once a supplier invoice is received in Purchasing." },
+  requirement: { plural: "requirements", where: "Requirements appear once they are configured in Standards." },
+  agentRun: { plural: "agent runs", where: "Agent runs appear once an agent is started." }
 };
 
 /** Is there anything at all to measure for this entity in the scope? */
@@ -121,6 +165,10 @@ function hasBasis(q: Q, entity: MetricDef["entity"]): boolean {
     case "record": case "issue": return q.records().length > 0;
     case "request": return q.requests().length > 0;
     case "person": return q.s.data.employment.length > 0;
+    case "project": return q.s.data.projects.length > 0;
+    case "invoice": return q.s.data.invoices.length > 0;
+    case "requirement": return q.s.data.obligations.length > 0;
+    case "agentRun": return q.s.data.agentRuns.length > 0;
   }
 }
 

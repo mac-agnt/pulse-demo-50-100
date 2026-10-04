@@ -49,10 +49,18 @@ export function formatMetric(def: MetricDef, v: number | null): string {
   return String(Math.round(v));
 }
 
-interface Raw { value: number | null; num?: number; den?: number; ids: Id[]; notes: string[]; partial?: boolean; missing?: { label: string; reason: string }[]; sources?: string[]; freshAt?: string | null; stale?: boolean }
+export interface Raw { value: number | null; num?: number; den?: number; ids: Id[]; notes: string[]; partial?: boolean; missing?: { label: string; reason: string }[]; sources?: string[]; freshAt?: string | null; stale?: boolean }
+
+/* Modules register their own measures here (projects at risk, invoices in
+   exception, requirements approved...). The calculation must follow the same
+   rules: exact ids, missing is not zero, ratios from totals, one currency. */
+export type MetricCalc = (q: Q, def: MetricDef, start: string, end: string) => Raw;
+const registered: Record<string, MetricCalc> = {};
+export function registerMetric(id: string, calc: MetricCalc) { registered[id] = calc; }
 
 function raw(q: Q, def: MetricDef, start: string, end: string): Raw {
   const s = q.s;
+  if (registered[def.id]) return registered[def.id](q, def, start, end);
   const inPeriod = (at?: string) => !!at && at > start && at <= end;
   switch (def.id) {
     case "backlog": {

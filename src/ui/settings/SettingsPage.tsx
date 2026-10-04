@@ -12,6 +12,11 @@ import { RequestFormsSection, ApprovalsSection, WorkflowsSection, SlaSection, No
 import { ConnectionsSection, MappingsSection, RecordTypesSection, MetricsSection } from "./systems";
 import { AccessSection, DocumentsSection, AuditSection } from "./governance";
 import { TerminologySection, ViewsSection, LayoutsSection, AppearanceSection, type AppearanceModel } from "./experience";
+import { OrchestrationSection } from "./orchestration";
+import { ProjectSetupSection } from "./projectSetup";
+import { PurchasingRulesSection } from "./purchasingRules";
+import { StandardsSetupSection } from "./standardsSetup";
+import { ModulesSection } from "./modules";
 import "../../styles/settings.css";
 
 export interface SettingsV {
@@ -26,7 +31,8 @@ export type SectionProps = { v: SettingsV };
 const BODIES: Record<string, ComponentType<SectionProps>> = {
   people: PeopleSection, structure: StructureSection, roles: RolesSection, delegation: DelegationSection,
   requestForms: RequestFormsSection, approvals: ApprovalsSection, workflows: WorkflowsSection, sla: SlaSection,
-  notifications: NotificationsSection, agents: AgentsSection,
+  notifications: NotificationsSection, agents: AgentsSection, orchestration: OrchestrationSection,
+  projectSetup: ProjectSetupSection, purchasingRules: PurchasingRulesSection, standardsSetup: StandardsSetupSection, modules: ModulesSection,
   connections: ConnectionsSection, mappings: MappingsSection, recordTypes: RecordTypesSection, metrics: MetricsSection,
   access: AccessSection, documents: DocumentsSection, audit: AuditSection,
   terminology: TerminologySection, views: ViewsSection, layouts: LayoutsSection, appearance: AppearanceSection
